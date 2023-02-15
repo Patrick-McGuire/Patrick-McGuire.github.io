@@ -1,0 +1,56 @@
+<!--from stackoverflow-->
+<html>
+<head>
+    <title>TideRider Control</title>
+    <link rel="shortcut icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Light_Blue_Circle.svg/1024px-Light_Blue_Circle.svg.png"/>
+    <style type="text/css">
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #content {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: 0px;
+        }
+
+    </style>
+</head>
+<body>
+<div id="content">
+    <label>Access key: </label> <input id="in" type="password" onchange="ld()">
+    <iframe width="100%" id="fr" height="100%" frameborder="0"></iframe>
+</div>
+<script>
+    function ld() {
+        var pw = document.getElementById("in").value
+        localStorage.setItem("TRPW", pw);
+
+        // Kinda dumb, but might make it harder for scrapers to spam the web <app></app>
+        var str = 'https://script.google.com/macros/s/'
+        str += 'AKfycbwdxMJKG7kZgKIrIS5Nau6y5CTOVhHOPU343IS_1CEBODss_h4mokJfeAbw4OWy7Ksg'
+        str += '/exec'
+        if (pw != "") {
+            str += '?data={%22type%22:%22' + "page" + '%22,%22auth%22:%22' + pw + '%22}'
+        }
+        document.getElementById("fr").src = str;
+    }
+
+    var pw = localStorage.getItem("TRPW");
+    if (pw != null) {
+        document.getElementById("in").value = pw;
+    }
+    ld();
+
+    setInterval(function () {
+        window.scrollTo(0, 0)
+    }, 10000);
+
+</script>
+</body>
+</html>
