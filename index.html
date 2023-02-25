@@ -31,17 +31,35 @@ background-color: #282828;
 <body>
 <div id="content">
     <label>Access key: </label> <input id="in" class="thing" type="password" onchange="ld()">
-    <iframe width="100%" id="fr" height="100%" frameborder="0"></iframe>
+
+<select name="comp" id="comp">
+</select>
+
+<iframe width="100%" id="fr" height="100%" frameborder="0" onchange="ld()"></iframe>
+
 </div>
 <script>
+    var srcs = {
+	"Template" : "https://script.google.com/macros/s/AKfycbwH_F5s1fGQfMif6SoS24HVC_00xd8chLv3CKeXvky76dOm90fhcoCvMj8zwFXNJsxP/exec",
+	
+    }
+
+select = document.getElementById('comp');
+
+for (var key in srcs) {
+    var opt = document.createElement('option');
+    opt.value = srcs[key];
+    opt.innerHTML = key;
+    select.appendChild(opt);
+}
+
+
     function ld() {
         var pw = document.getElementById("in").value
         localStorage.setItem("TRPW", pw);
 
         // Kinda dumb, but might make it harder for scrapers to spam the web <app></app>
-        var str = 'https://script.google.com/macros/s/'
-        str += 'AKfycbwH_F5s1fGQfMif6SoS24HVC_00xd8chLv3CKeXvky76dOm90fhcoCvMj8zwFXNJsxP'
-        str += '/exec'
+	var str = document.getElementById("comp").value
         if (pw != "") {
             str += '?data={%22type%22:%22' + "page" + '%22,%22auth%22:%22' + pw + '%22}'
         }
