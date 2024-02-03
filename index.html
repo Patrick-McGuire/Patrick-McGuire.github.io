@@ -9,14 +9,14 @@
             padding: 0;
             height: 100%;
             overflow: hidden;
-	background-color: #282828;
-color: #C0C0C0;
+            background-color: #282828;
+            color: #C0C0C0;
         }
 
-.thing {
-background-color: #282828;
-color: #C0C0C0;
-}
+        .thing {
+            background-color: #282828;
+            color: #C0C0C0;
+        }
 
         #content {
             position: absolute;
@@ -32,34 +32,35 @@ color: #C0C0C0;
 <div id="content">
     <label>Access key: </label> <input id="in" class="thing" type="password" onchange="ld()">
 
-<select name="comp" id="comp" onchange="ld()" class="thing">
-</select>
+    <select name="comp" id="comp" onchange="ld()" class="thing">
+    </select>
 
-<iframe width="100%" id="fr" height="100%" frameborder="0"></iframe>
+    <iframe width="100%" id="fr" height="100%" frameborder="0"></iframe>
 
 </div>
 <script>
     var srcs = {
-	"BattleCry" : "https://script.google.com/macros/s/AKfycbwgT1QG_AUk8Z7ullJuKTmrfb5IVRLGXxirUSS91McXNotuJg3TcjYGY7wrRjMJW6rEAA/exec",
-	"Einstein" : "https://script.google.com/macros/s/AKfycbwjvDVIZEEn5nRnX56fjSlvFEocuVLeyvW5TYaVT2ISEwuksIRZiNQ_SQOxsxO8ONMq9w/exec",
-	"World Championship" : "https://script.google.com/macros/s/AKfycbxcvBiciGtd0FhHKNIdlM7B2IozAhMhcaNtNYgjMeR803J0ZUGmf_lLaa8AGU9emM1qFQ/exec",
-	"Week 6: NE District Championship" : "https://script.google.com/macros/s/AKfycbxOIifWyxeGtqMPmN6SAzJiFIUZ0ONlKxVDyKVyHNgaQmJ3dBmherLXB0Acyg40d7sNKA/exec",
-	"Week 4: Greater Boston" : "https://script.google.com/macros/s/AKfycbyDG9NY4KsDIv86npxFBzPBt-RTQrlHp08PCo4mXQeScthYoiZFGXAY38GOC8V1ATIO/exec",
-	"Week 2: Mount Olive" : "https://script.google.com/macros/s/AKfycbyWwzdOSFB66yYa0Cd1LcfVbsaw7za8DBZqku6ro5EpWe5V2LQKILrbxr7-LIC47Jv3/exec",
-	"Week 1: SE Mass" : "https://script.google.com/macros/s/AKfycby0mxX4rBOYnsR9-9p0M1Xl4L_b80GEhUT0Av746pB-KfyXLhrAqsagPC7rL9V81-MFjA/exec",
-	"Week 0" : "https://script.google.com/macros/s/AKfycbwjT8RPdFiK4mV8r4B602gIP55joQ6eBa1a4hM7ZQePxTp3JVbXsSH2hj_6N6W_rGY9/exec",
-	"Template" : "https://script.google.com/macros/s/AKfycbwH_F5s1fGQfMif6SoS24HVC_00xd8chLv3CKeXvky76dOm90fhcoCvMj8zwFXNJsxP/exec",
-	"Dev" : "https://script.google.com/macros/s/AKfycbxjdS00DHKtw1aXpWG1ByKg35pF1BdNgoaLDqjtxNhf5ofTxIu010rqbmwIqLbrFAfBbw/exec",
-	}
+        "2024 Test": "https://script.google.com/macros/s/AKfycby_-GItjEECwQxqbgFCoeXlQmgypc_r5VfXrUgHwbdYievYhRpxTc8WxkQVWNotti_sGA/exec",
+        "BattleCry": "https://script.google.com/macros/s/AKfycbwgT1QG_AUk8Z7ullJuKTmrfb5IVRLGXxirUSS91McXNotuJg3TcjYGY7wrRjMJW6rEAA/exec",
+        "Einstein": "https://script.google.com/macros/s/AKfycbwjvDVIZEEn5nRnX56fjSlvFEocuVLeyvW5TYaVT2ISEwuksIRZiNQ_SQOxsxO8ONMq9w/exec",
+        "World Championship": "https://script.google.com/macros/s/AKfycbxcvBiciGtd0FhHKNIdlM7B2IozAhMhcaNtNYgjMeR803J0ZUGmf_lLaa8AGU9emM1qFQ/exec",
+        "Week 6: NE District Championship": "https://script.google.com/macros/s/AKfycbxOIifWyxeGtqMPmN6SAzJiFIUZ0ONlKxVDyKVyHNgaQmJ3dBmherLXB0Acyg40d7sNKA/exec",
+        "Week 4: Greater Boston": "https://script.google.com/macros/s/AKfycbyDG9NY4KsDIv86npxFBzPBt-RTQrlHp08PCo4mXQeScthYoiZFGXAY38GOC8V1ATIO/exec",
+        "Week 2: Mount Olive": "https://script.google.com/macros/s/AKfycbyWwzdOSFB66yYa0Cd1LcfVbsaw7za8DBZqku6ro5EpWe5V2LQKILrbxr7-LIC47Jv3/exec",
+        "Week 1: SE Mass": "https://script.google.com/macros/s/AKfycby0mxX4rBOYnsR9-9p0M1Xl4L_b80GEhUT0Av746pB-KfyXLhrAqsagPC7rL9V81-MFjA/exec",
+        "Week 0": "https://script.google.com/macros/s/AKfycbwjT8RPdFiK4mV8r4B602gIP55joQ6eBa1a4hM7ZQePxTp3JVbXsSH2hj_6N6W_rGY9/exec",
+        "Template": "https://script.google.com/macros/s/AKfycbwH_F5s1fGQfMif6SoS24HVC_00xd8chLv3CKeXvky76dOm90fhcoCvMj8zwFXNJsxP/exec",
+        "Dev": "https://script.google.com/macros/s/AKfycbxjdS00DHKtw1aXpWG1ByKg35pF1BdNgoaLDqjtxNhf5ofTxIu010rqbmwIqLbrFAfBbw/exec",
+    }
 
-select = document.getElementById('comp');
+    select = document.getElementById('comp');
 
-for (var key in srcs) {
-    var opt = document.createElement('option');
-    opt.value = srcs[key];
-    opt.innerHTML = key;
-    select.appendChild(opt);
-}
+    for (var key in srcs) {
+        var opt = document.createElement('option');
+        opt.value = srcs[key];
+        opt.innerHTML = key;
+        select.appendChild(opt);
+    }
 
 
     function ld() {
@@ -67,7 +68,7 @@ for (var key in srcs) {
         localStorage.setItem("TRPW", pw);
 
         // Kinda dumb, but might make it harder for scrapers to spam the web <app></app>
-	var str = document.getElementById("comp").value
+        var str = document.getElementById("comp").value
         if (pw != "") {
             str += '?data={%22type%22:%22' + "page" + '%22,%22auth%22:%22' + pw + '%22}'
         }
