@@ -40,18 +40,17 @@
 </div>
 <script>
     var srcs = {
-        "2024 BSU":"https://script.google.com/macros/s/AKfycbx_d4YZfUbIp716e-apzvNOm6JyYTD4xnBlWX8xN8JVT2kgQoKG_Mdf3wC06nYIWJGb/exec",
-        "2024 Test": "https://script.google.com/macros/s/AKfycbxNYXUu58-BVM0kL89iKdxyKpJfKw-HRVsh9FmoqrxPTSVIxOe1qYjzHwO3sjLTzvqisA/exec",
-//        "BattleCry": "https://script.google.com/macros/s/AKfycbwgT1QG_AUk8Z7ullJuKTmrfb5IVRLGXxirUSS91McXNotuJg3TcjYGY7wrRjMJW6rEAA/exec",
-//        "Einstein": "https://script.google.com/macros/s/AKfycbwjvDVIZEEn5nRnX56fjSlvFEocuVLeyvW5TYaVT2ISEwuksIRZiNQ_SQOxsxO8ONMq9w/exec",
-        "2023/World Championship": "https://script.google.com/macros/s/AKfycbxcvBiciGtd0FhHKNIdlM7B2IozAhMhcaNtNYgjMeR803J0ZUGmf_lLaa8AGU9emM1qFQ/exec",
-        "2023/Week 6: NE District Championship": "https://script.google.com/macros/s/AKfycbxOIifWyxeGtqMPmN6SAzJiFIUZ0ONlKxVDyKVyHNgaQmJ3dBmherLXB0Acyg40d7sNKA/exec",
-        "2023/Week 4: Greater Boston": "https://script.google.com/macros/s/AKfycbyDG9NY4KsDIv86npxFBzPBt-RTQrlHp08PCo4mXQeScthYoiZFGXAY38GOC8V1ATIO/exec",
-        "2023/Week 2: Mount Olive": "https://script.google.com/macros/s/AKfycbyWwzdOSFB66yYa0Cd1LcfVbsaw7za8DBZqku6ro5EpWe5V2LQKILrbxr7-LIC47Jv3/exec",
-        "2023/Week 1: SE Mass": "https://script.google.com/macros/s/AKfycby0mxX4rBOYnsR9-9p0M1Xl4L_b80GEhUT0Av746pB-KfyXLhrAqsagPC7rL9V81-MFjA/exec",
-        "2023/Week 0": "https://script.google.com/macros/s/AKfycbwjT8RPdFiK4mV8r4B602gIP55joQ6eBa1a4hM7ZQePxTp3JVbXsSH2hj_6N6W_rGY9/exec",
-//        "Template": "https://script.google.com/macros/s/AKfycbwH_F5s1fGQfMif6SoS24HVC_00xd8chLv3CKeXvky76dOm90fhcoCvMj8zwFXNJsxP/exec",
-//        "Dev": "https://script.google.com/macros/s/AKfycbxjdS00DHKtw1aXpWG1ByKg35pF1BdNgoaLDqjtxNhf5ofTxIu010rqbmwIqLbrFAfBbw/exec",
+        "2024 Test": "https://script.google.com/macros/s/AKfycbyqR4BuoCRDxYs9-KTL6FSHQo-114YUQtys_5VHqxbIoRg_ldMqzXCCzvebNrfut9bN/exec",
+        "BattleCry": "https://script.google.com/macros/s/AKfycbwgT1QG_AUk8Z7ullJuKTmrfb5IVRLGXxirUSS91McXNotuJg3TcjYGY7wrRjMJW6rEAA/exec",
+        "Einstein": "https://script.google.com/macros/s/AKfycbwjvDVIZEEn5nRnX56fjSlvFEocuVLeyvW5TYaVT2ISEwuksIRZiNQ_SQOxsxO8ONMq9w/exec",
+        "World Championship": "https://script.google.com/macros/s/AKfycbxcvBiciGtd0FhHKNIdlM7B2IozAhMhcaNtNYgjMeR803J0ZUGmf_lLaa8AGU9emM1qFQ/exec",
+        "Week 6: NE District Championship": "https://script.google.com/macros/s/AKfycbxOIifWyxeGtqMPmN6SAzJiFIUZ0ONlKxVDyKVyHNgaQmJ3dBmherLXB0Acyg40d7sNKA/exec",
+        "Week 4: Greater Boston": "https://script.google.com/macros/s/AKfycbyDG9NY4KsDIv86npxFBzPBt-RTQrlHp08PCo4mXQeScthYoiZFGXAY38GOC8V1ATIO/exec",
+        "Week 2: Mount Olive": "https://script.google.com/macros/s/AKfycbyWwzdOSFB66yYa0Cd1LcfVbsaw7za8DBZqku6ro5EpWe5V2LQKILrbxr7-LIC47Jv3/exec",
+        "Week 1: SE Mass": "https://script.google.com/macros/s/AKfycby0mxX4rBOYnsR9-9p0M1Xl4L_b80GEhUT0Av746pB-KfyXLhrAqsagPC7rL9V81-MFjA/exec",
+        "Week 0": "https://script.google.com/macros/s/AKfycbwjT8RPdFiK4mV8r4B602gIP55joQ6eBa1a4hM7ZQePxTp3JVbXsSH2hj_6N6W_rGY9/exec",
+        "Template": "https://script.google.com/macros/s/AKfycbwH_F5s1fGQfMif6SoS24HVC_00xd8chLv3CKeXvky76dOm90fhcoCvMj8zwFXNJsxP/exec",
+        "Dev": "https://script.google.com/macros/s/AKfycbxjdS00DHKtw1aXpWG1ByKg35pF1BdNgoaLDqjtxNhf5ofTxIu010rqbmwIqLbrFAfBbw/exec",
     }
 
     select = document.getElementById('comp');
