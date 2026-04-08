@@ -253,14 +253,14 @@
     let activeSeries = [11, 12, 13];
 
     const configs = [
-        { id: "DROGUE_DELAY", label: "Drogue Delay" },
-        { id: "MAIN_ELEVATION", label: "Main Elev" },
-        { id: "BATTERY_VOLTAGE_SENSOR_SCALE_FACTOR", label: "Batt Scale" },
-        { id: "GROUND_ELEVATION", label: "Ground Elev" },
-        { id: "GROUND_TEMPERATURE", label: "Ground Temp" },
-        { id: "PYRO_FIRE_DURATION", label: "Pyro Duration" },
+        { id: "DROGUE_DELAY", label: "Drogue Delay (ms)" },
+        { id: "MAIN_ELEVATION", label: "Main Elevation (m)" },
+        { id: "BATTERY_VOLTAGE_SENSOR_SCALE_FACTOR", label: "Battery Scale" },
+        { id: "GROUND_ELEVATION", label: "Ground Elevation Offset (m)" },
+        { id: "GROUND_TEMPERATURE", label: "Ground Temperature (kelvin)" },
+        { id: "PYRO_FIRE_DURATION", label: "Pyro Duration (ms)" },
         { id: "BOARD_NAME", label: "Board Name" },
-        { id: "CONFIGURATION_VERSION", label: "Config Ver" }
+        { id: "CONFIGURATION_VERSION", label: "Config Version" }
     ];
 
     function formatLogTime(seconds) {
