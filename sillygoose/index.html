@@ -22,9 +22,29 @@
             padding: 20px; gap: 15px; box-sizing: border-box;
         }
         #main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; gap: 10px; overflow-y: auto; }
-        
+
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
         .header-right { display: flex; align-items: center; gap: 15px; }
+
+        /* Updated Logo Layout - Stacked & Full Width */
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 5px;
+        }
+        .logo-img {
+            width: 50%;
+            align-self: center;
+            height: auto;
+            border-radius: 8px;
+            object-fit: contain;
+        }
+        .logo-text-group {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
 
         .loader {
             width: 20px; height: 20px; border: 3px solid var(--border);
@@ -34,8 +54,8 @@
         @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         .tabs { display: flex; gap: 10px; }
-        .tab-btn { 
-            padding: 10px 20px; border: none; background: none; color: #94a3b8; 
+        .tab-btn {
+            padding: 10px 20px; border: none; background: none; color: #94a3b8;
             cursor: pointer; font-weight: 600; border-bottom: 2px solid transparent;
         }
         .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -47,8 +67,8 @@
         .config-item { background: #111827; padding: 10px; border-radius: 6px; border: 1px solid var(--border); }
         .config-label { font-size: 0.7rem; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; }
         .config-input-group { display: flex; gap: 5px; }
-        .config-input-group input { 
-            background: #0f172a; border: 1px solid var(--border); color: white; 
+        .config-input-group input {
+            background: #0f172a; border: 1px solid var(--border); color: white;
             padding: 5px; border-radius: 4px; flex-grow: 1; width: 50px; font-size: 0.85rem;
         }
 
@@ -79,20 +99,20 @@
         #flight-list { flex-grow: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: #0f172a; min-height: 150px; }
         .flight-item { padding: 5px 10px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; height: 40px; box-sizing: border-box; }
         .flight-item.active { background: #1e293b; border-left: 4px solid var(--accent); }
-        .del-btn { 
-            background: #334155; color: #ef4444; border: none; border-radius: 4px; 
+        .del-btn {
+            background: #334155; color: #ef4444; border: none; border-radius: 4px;
             width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem;
         }
         .del-btn:hover { background: #ef4444; color: white; }
 
-        #plot-container { background-color: var(--card-bg); border-radius: 12px; flex-grow: 1; border: 1px solid var(--border); }
+        #plot-container, #live-plot-container { background-color: var(--card-bg); border-radius: 12px; flex-grow: 1; border: 1px solid var(--border); }
         #terminal { background: #000; color: #00ff41; font-family: 'Courier New', monospace; padding: 12px; font-size: 0.75rem; overflow-y: auto; border-radius: 8px; height: 140px; border: 1px solid var(--border); line-height: 1.4; }
-        
+
         .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
         .stat-card { background: var(--card-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border); text-align: center; display: flex; flex-direction: column; justify-content: center; }
         .stat-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
 
-        #hover-dashboard {
+        .hover-dashboard {
             background: #111827; border: 1px solid var(--border); border-radius: 8px;
             padding: 10px; display: flex; flex-wrap: wrap; gap: 15px; min-height: 40px;
             align-items: center; font-size: 0.85rem;
@@ -112,19 +132,22 @@
 </div>
 
 <div id="sidebar">
-    <h2 style="margin:0">🪿 SillyGoose</h2>
-    
-    <button id="connectBtn" class="btn">Connect Device</button>
-    <button id="disconnectBtn" class="btn btn-danger" style="display:none">Disconnect Port</button>
-    
+    <div class="logo-container">
+        <img class="logo-img" src="https://drive.google.com/thumbnail?id=18nMOGrQigUZnzQB7yMNRQz2x-HdTepvX&sz=w480-h480" alt="Logo">
+        <div class="logo-text-group">
+            <button id="connectBtn" class="btn">Connect Device</button>
+            <button id="disconnectBtn" class="btn btn-danger" style="display:none">Disconnect Port</button>
+        </div>
+    </div>
+
     <div style="font-size: 0.75rem; color: #94a3b8; margin-top:10px;">SESSION FLIGHTS</div>
     <div id="flight-list"></div>
-    
+
     <div class="sidebar-actions">
         <button id="downloadZipBtn" class="btn btn-secondary" disabled>Download All (ZIP)</button>
         <button id="clearAllBtn" class="btn btn-danger">Clear Session</button>
         <input type="file" id="file-upload" style="display:none">
-        <label for="file-upload" class="btn btn-secondary">Load Local File</label>
+        <label for="file-upload" class="btn btn-secondary" style="display: flex; align-items: center; justify-content: center; cursor: pointer;">Load Local File</label>
         <button id="saveFileBtn" class="btn btn-secondary" disabled>Download Selected</button>
     </div>
 </div>
@@ -133,7 +156,8 @@
     <header>
         <div class="tabs">
             <button class="tab-btn active" onclick="openTab('flight-tab')">Flight Data</button>
-            <button class="tab-btn" onclick="openTab('config-tab')">System Control</button>
+            <button class="tab-btn" onclick="openTab('live-tab')">Live Stream</button>
+            <button class="tab-btn" onclick="openTab('config-tab')">System Configuration</button>
         </div>
         <div class="header-right">
             <div id="busy-loader" class="loader"></div>
@@ -148,12 +172,38 @@
             <div class="stat-card"><button id="offloadBtn" class="btn btn-secondary" disabled style="height:100%; font-size:0.75rem">Offload Data</button></div>
             <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size: 0.75rem;" onclick="openSeriesModal()">Select Series</button></div>
         </div>
-
-        <div id="hover-dashboard">
+        <div id="hover-dashboard" class="hover-dashboard">
             <div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>
         </div>
-
         <div id="plot-container"></div>
+    </div>
+
+    <div id="live-tab" class="tab-content">
+        <div class="stats-grid">
+            <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size: 0.75rem;" onclick="openSeriesModal()">Select Series</button></div>
+            <div class="stat-card">
+                <button id="streamStartBtn" class="btn btn-secondary" style="height:45%; font-size:0.6rem; margin-bottom:2px" disabled onclick="sendCmd('--streamLog -b')">Start Stream</button>
+                <button id="streamStopBtn" class="btn btn-danger" style="height:45%; font-size:0.6rem" disabled onclick="sendCmd('--streamLog -e')">Stop Stream</button>
+            </div>
+            <div class="stat-card">
+                <div style="font-size: 0.6rem; color: #94a3b8; margin-bottom: 2px;">HISTORY: <span id="hist-val">200</span></div>
+                <input type="range" id="history-slider" min="50" max="1000" value="200" style="width:100%">
+            </div>
+            <div class="stat-card">
+                <button id="logStartBtn" class="btn btn-warn" style="height:45%; font-size:0.6rem; margin-bottom:2px" disabled onclick="sendCmd('--log -b')">Log Enable</button>
+                <button id="logStopBtn" class="btn btn-secondary" style="height:45%; font-size:0.6rem" disabled onclick="sendCmd('--log -e')">Log Disable</button>
+            </div>
+            <div class="stat-card" style="font-size:0.6rem; text-align:left; color:#94a3b8; line-height:1.2">
+                Entries: <span id="log-entries" style="color:white">-</span><br>
+                Remaining: <span id="log-rem" style="color:white">-</span><br>
+                Status: <span id="log-status" style="color:white">-</span>
+                <button id="logHealthBtn" class="btn btn-secondary" style="height:18px; font-size:0.55rem; margin-top:3px" disabled onclick="sendCmd('--log')">Health</button>
+            </div>
+        </div>
+        <div id="live-hover-dashboard" class="hover-dashboard">
+            <div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>
+        </div>
+        <div id="live-plot-container"></div>
     </div>
 
     <div id="config-tab" class="tab-content">
@@ -179,22 +229,28 @@
 
 <script>
     let port, reader, inputDone, keepReading = true;
-    let flightData = []; 
+    let flightData = [];
     let selectedIdx = -1;
     let termBuffer = "";
-    
+    let cmdHistory = [];
+    let historyIdx = -1;
+
     let recording = false;
+    let streaming = false;
     let currentFlightLines = [];
+    let liveDataBuffer = [];
+    let maxLivePoints = 200;
+    let isLiveHovering = false;
 
     const HEADER = [
         "timestampMs", "pressurePa", "tempK", "accelX", "accelY", "accelZ",
-        "gyroX", "gyroY", "gyroZ", "imuTemp", "battV", "altitudeM", 
+        "gyroX", "gyroY", "gyroZ", "imuTemp", "battV", "altitudeM",
         "velocityMS", "accelerationMSS", "unfiltAlt", "flightState",
         "drogueCont", "drogueFired", "mainCont", "mainFired"
     ];
 
     const stateNames = {0:"PRE_FLIGHT", 1:"ASCENT", 2:"DESCENT", 3:"POST_FLIGHT"};
-    let activeSeries = [11, 12, 13]; 
+    let activeSeries = [11, 12, 13];
 
     const configs = [
         { id: "DROGUE_DELAY", label: "Drogue Delay" },
@@ -206,6 +262,15 @@
         { id: "BOARD_NAME", label: "Board Name" },
         { id: "CONFIGURATION_VERSION", label: "Config Ver" }
     ];
+
+    function formatLogTime(seconds) {
+        const s = parseInt(seconds);
+        if (isNaN(s)) return "-";
+        const hrs = Math.floor(s / 3600);
+        const mins = Math.floor((s % 3600) / 60);
+        const secs = s % 60;
+        return `${hrs}h ${mins}m ${secs}s`;
+    }
 
     function setBusy(val) {
         document.getElementById('busy-loader').style.display = val ? 'block' : 'none';
@@ -226,20 +291,13 @@
 
     async function disconnect() {
         keepReading = false;
-        if (reader) {
-            await reader.cancel();
-            await inputDone.catch(() => {});
-            reader = null;
-        }
-        if (port) {
-            await port.close();
-            port = null;
-        }
+        if (reader) { await reader.cancel(); await inputDone.catch(() => {}); reader = null; }
+        if (port) { await port.close(); port = null; }
         forceUIDisconnect();
     }
 
     function forceUIDisconnect() {
-        port = null; setBusy(false); recording = false;
+        port = null; setBusy(false); recording = false; streaming = false;
         document.getElementById('connectBtn').style.display = 'block';
         document.getElementById('disconnectBtn').style.display = 'none';
         setSerialEnabled(false);
@@ -265,6 +323,16 @@
                         if (!line) continue;
                         logTerm(line);
 
+                        if (line.includes("Entries in log:")) document.getElementById('log-entries').innerText = line.split(':').pop().trim();
+                        if (line.includes("Remaining log length:")) {
+                            const rawVal = line.split(':').pop().trim();
+                            document.getElementById('log-rem').innerText = formatLogTime(rawVal);
+                        }
+                        if (line.includes("Logging")) document.getElementById('log-status').innerText = line.includes("enabled") ? "ON" : "OFF";
+
+                        if (line.includes("Streaming enabled")) { streaming = true; liveDataBuffer = []; }
+                        if (line.includes("Streaming disabled")) streaming = false;
+
                         const setMatch = line.match(/MSG:\s+([A-Z_]+)\s+is set to:\s+(.+)/);
                         if (setMatch) {
                             const inputEl = document.getElementById(`in-${setMatch[1]}`);
@@ -272,36 +340,73 @@
                             setBusy(false);
                         }
 
-                        if (line.includes("Starting Offload")) {
-                            recording = true; currentFlightLines = []; setBusy(true);
-                            continue;
-                        }
+                        if (line.includes("Starting Offload")) { recording = true; currentFlightLines = []; setBusy(true); continue; }
+
+                        if (streaming && /^\d/.test(line)) handleLiveLine(line);
 
                         if (recording) {
-                            if (line.includes("Logger setup")) {
-                                if (currentFlightLines.length > 5) saveFlight(currentFlightLines);
-                                currentFlightLines = [];
-                                continue;
-                            }
-                            if (line.includes("Ending Offload")) {
-                                if (currentFlightLines.length > 5) saveFlight(currentFlightLines);
-                                recording = false; currentFlightLines = []; setBusy(false);
-                                continue;
-                            }
+                            if (line.includes("Logger setup")) { if (currentFlightLines.length > 5) saveFlight(currentFlightLines); currentFlightLines = []; continue; }
+                            if (line.includes("Ending Offload")) { if (currentFlightLines.length > 5) saveFlight(currentFlightLines); recording = false; currentFlightLines = []; setBusy(false); continue; }
                             if (/^\d/.test(line)) currentFlightLines.push(line);
                         }
                         if (line.includes("Erase Complete")) setBusy(false);
                     }
                 }
-            } catch (e) { 
-                break; 
-            } finally { 
-                if (reader) {
-                    reader.releaseLock();
-                    reader = null;
-                }
-            }
+            } catch (e) { break; } finally { if (reader) { reader.releaseLock(); reader = null; } }
         }
+    }
+
+    function handleLiveLine(line) {
+        const parts = line.split(/[\s\t]+/);
+        if (parts.length < HEADER.length) return;
+        liveDataBuffer.push(parts);
+        if (liveDataBuffer.length > maxLivePoints) liveDataBuffer.shift();
+
+        if (document.getElementById('live-tab').classList.contains('active') && !document.hidden) {
+            requestAnimationFrame(plotLive);
+        }
+    }
+
+    function updateLiveDashboardWithMostRecent() {
+        if (liveDataBuffer.length === 0 || isLiveHovering) return;
+        const dash = document.getElementById('live-hover-dashboard');
+        const last = liveDataBuffer[liveDataBuffer.length - 1];
+        const t0 = parseFloat(liveDataBuffer[0][0]);
+        const time = (parseFloat(last[0]) - t0) / 1000;
+
+        let html = `<div class="hover-item">Live Time: <span class="hover-val">${time.toFixed(3)}s</span></div>`;
+        activeSeries.forEach(idx => {
+            html += `<div class="hover-item">${HEADER[idx]}: <span class="hover-val">${parseFloat(last[idx]).toFixed(2)}</span></div>`;
+        });
+        dash.innerHTML = html;
+    }
+
+    function plotLive() {
+        if (liveDataBuffer.length === 0) return;
+
+        const t0 = parseFloat(liveDataBuffer[0][0]);
+        const t = liveDataBuffer.map(r => (parseFloat(r[0]) - t0) / 1000);
+
+        const traces = activeSeries.map(idx => {
+            const vals = liveDataBuffer.map(r => parseFloat(r[idx]));
+            return {
+                x: t, y: vals, name: HEADER[idx], mode: 'lines',
+                hoverinfo: 'none'
+            };
+        });
+
+        const gd = document.getElementById('live-plot-container');
+
+        Plotly.react(gd, traces, {
+            paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+            font:{color:'#f8fafc'}, margin:{t:40, r:20, l:50, b:40},
+            hovermode:'x', xaxis:{title:'Time (s)', gridcolor:'#334155', showspikes: true, spikemode: 'across', spikesnap: 'cursor', spikedash: 'dash', spikecolor: '#94a3b8', spikethickness: 1},
+            yaxis:{gridcolor:'#334155'}, showlegend: true,
+            legend: { orientation: 'h', y: 1.1 }
+        }, {responsive: true, displaylogo: false}).then(() => {
+            setupHoverEvents('live-plot-container', 'live-hover-dashboard', true);
+            updateLiveDashboardWithMostRecent();
+        });
     }
 
     async function sendCmd(msg) {
@@ -311,7 +416,7 @@
         await writer.write(new TextEncoder().encode(msg + "\n"));
         writer.releaseLock();
         logTerm(`>> ${msg}`, "#38bdf8");
-        if(!msg.includes("offload") && !msg.includes("erase")) setTimeout(() => setBusy(false), 800);
+        if(!msg.includes("offload") && !msg.includes("erase") && !msg.includes("streamLog")) setTimeout(() => setBusy(false), 800);
     }
 
     function saveFlight(lines) {
@@ -351,7 +456,7 @@
             const vals = rows.map(r => parseFloat(r[idx]));
             return {
                 x: t, y: vals, name: HEADER[idx], mode: 'lines',
-                hovertemplate: '<b>%{y:.2f}</b><extra></extra>'
+                hoverinfo: 'none'
             };
         });
 
@@ -368,37 +473,52 @@
             if (rows[i][19] == "1" && rows[i-1][19] == "0") addEv(t[i], "MAIN FIRED", "blue");
         }
 
-        Plotly.newPlot('plot-container', traces, {
+        const gd = document.getElementById('plot-container');
+        Plotly.newPlot(gd, traces, {
             paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
             font:{color:'#f8fafc'}, margin:{t:60, r:20, l:50, b:40},
-            hovermode:'x unified', xaxis:{title:'Time (s)', gridcolor:'#334155'},
+            hovermode:'x', xaxis:{title:'Time (s)', gridcolor:'#334155', showspikes: true, spikemode: 'across', spikesnap: 'cursor', spikedash: 'dash', spikecolor: '#94a3b8', spikethickness: 1},
             yaxis:{title:'Data', gridcolor:'#334155'}, shapes, annotations,
             showlegend: true,
-            legend: {
-                orientation: 'h',
-                yanchor: 'bottom',
-                y: 1.02,
-                xanchor: 'right',
-                x: 1,
-                font: { size: 10, color: '#94a3b8' }
-            }
-        }, {responsive: true, displaylogo: false});
-
-        const gd = document.getElementById('plot-container');
-        gd.on('plotly_hover', data => {
-            let html = `<div class="hover-item">Time: <span class="hover-val">${data.points[0].x.toFixed(3)}s</span></div>`;
-            data.points.forEach(pt => {
-                html += `<div class="hover-item">${pt.data.name}: <span class="hover-val">${pt.y.toFixed(2)}</span></div>`;
-            });
-            document.getElementById('hover-dashboard').innerHTML = html;
-        });
-        gd.on('plotly_unhover', () => {
-            document.getElementById('hover-dashboard').innerHTML = `<div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>`;
+            legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, xanchor: 'right', x: 1, font: { size: 10, color: '#94a3b8' } }
+        }, {responsive: true, displaylogo: false}).then(() => {
+            setupHoverEvents('plot-container', 'hover-dashboard', false);
         });
 
         document.getElementById('stat-alt').innerText = Math.max(...rows.map(r => parseFloat(r[11]))).toFixed(1);
         document.getElementById('stat-vel').innerText = Math.max(...rows.map(r => parseFloat(r[12]))).toFixed(1);
         document.getElementById('stat-state').innerText = stateNames[states[states.length-1]] || '-';
+    }
+
+    function setupHoverEvents(plotId, dashId, isLiveTab) {
+        const gd = document.getElementById(plotId);
+        const dash = document.getElementById(dashId);
+
+        const resetText = () => {
+            if (isLiveTab) {
+                isLiveHovering = false;
+                updateLiveDashboardWithMostRecent();
+            } else {
+                dash.innerHTML = `<div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>`;
+            }
+        };
+
+        gd.removeAllListeners('plotly_hover');
+        gd.removeAllListeners('plotly_unhover');
+
+        gd.on('plotly_hover', data => {
+            if (!data || !data.points) return;
+            if (isLiveTab) isLiveHovering = true;
+            let html = `<div class="hover-item">Time: <span class="hover-val">${data.points[0].x.toFixed(3)}s</span></div>`;
+            data.points.forEach(pt => {
+                html += `<div class="hover-item">${pt.data.name}: <span class="hover-val">${pt.y.toFixed(2)}</span></div>`;
+            });
+            dash.innerHTML = html;
+        });
+
+        gd.on('plotly_unhover', resetText);
+
+        if (!isLiveTab || !isLiveHovering) resetText();
     }
 
     function logTerm(msg, color = "#00ff41") {
@@ -415,7 +535,7 @@
     }, 100);
 
     function setSerialEnabled(en) {
-        document.querySelectorAll('.ctrl-btn, .cfg-get, .cfg-set, #sendBtn, #offloadBtn, #getAllBtn, #eraseBtn').forEach(b => b.disabled = !en);
+        document.querySelectorAll('.ctrl-btn, .cfg-get, .cfg-set, #sendBtn, #offloadBtn, #getAllBtn, #eraseBtn, #streamStartBtn, #streamStopBtn, #logStartBtn, #logStopBtn, #logHealthBtn').forEach(b => b.disabled = !en);
     }
 
     function initUI() {
@@ -440,7 +560,12 @@
 
     function deleteLog(i) {
         flightData.splice(i, 1);
-        if(selectedIdx === i) { selectedIdx = -1; Plotly.purge('plot-container'); document.getElementById('saveFileBtn').disabled = true; }
+        if(selectedIdx === i) {
+            selectedIdx = -1;
+            Plotly.purge('plot-container');
+            document.getElementById('saveFileBtn').disabled = true;
+            document.getElementById('hover-dashboard').innerHTML = `<div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>`;
+        }
         refreshList();
     }
 
@@ -449,6 +574,7 @@
             flightData = []; selectedIdx = -1;
             Plotly.purge('plot-container');
             document.getElementById('saveFileBtn').disabled = true;
+            document.getElementById('hover-dashboard').innerHTML = `<div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>`;
             refreshList();
         }
     }
@@ -460,15 +586,33 @@
     }
 
     function openSeriesModal() { document.getElementById('series-modal').style.display = 'flex'; }
-    function closeSeriesModal() { 
+    function closeSeriesModal() {
         activeSeries = Array.from(document.querySelectorAll('#series-picker input:checked')).map(i => parseInt(i.dataset.idx));
         document.getElementById('series-modal').style.display = 'none';
         if(selectedIdx !== -1) plotFlight(flightData[selectedIdx]);
+        if(streaming) plotLive();
     }
 
-    async function confirmErase() {
-        if(confirm("⚠️ Erase flash?")) await sendCmd("--erase");
-    }
+    async function confirmErase() { if(confirm("⚠️ Erase flash?")) await sendCmd("--erase"); }
+
+    const cmdInput = document.getElementById('cmd-input');
+    cmdInput.onkeydown = e => {
+        if(e.key === 'Enter') {
+            const val = cmdInput.value.trim();
+            if(val) { sendCmd(val); cmdHistory.push(val); historyIdx = cmdHistory.length; cmdInput.value = ''; }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (historyIdx > 0) { historyIdx--; cmdInput.value = cmdHistory[historyIdx]; }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIdx < cmdHistory.length - 1) { historyIdx++; cmdInput.value = cmdHistory[historyIdx]; } else { historyIdx = cmdHistory.length; cmdInput.value = ''; }
+        }
+    };
+
+    document.getElementById('history-slider').oninput = function() {
+        maxLivePoints = parseInt(this.value);
+        document.getElementById('hist-val').innerText = this.value;
+    };
 
     document.getElementById('saveFileBtn').onclick = () => {
         const f = flightData[selectedIdx];
@@ -479,10 +623,7 @@
 
     document.getElementById('downloadZipBtn').onclick = async () => {
         const zip = new JSZip();
-        flightData.forEach(f => {
-            const content = HEADER.join("\t") + "\n" + f.raw.join("\n");
-            zip.file(`${f.name}.txt`, content);
-        });
+        flightData.forEach(f => { zip.file(`${f.name}.txt`, HEADER.join("\t") + "\n" + f.raw.join("\n")); });
         const content = await zip.generateAsync({type:"blob"});
         const a = document.createElement('a'); a.href = URL.createObjectURL(content);
         a.download = "SillyGoose_All_Flights.zip"; a.click();
@@ -493,28 +634,24 @@
     document.getElementById('offloadBtn').onclick = () => sendCmd("--offload");
     document.getElementById('clearAllBtn').onclick = clearAllSession;
     document.getElementById('getAllBtn').onclick = () => configs.forEach((c, i) => setTimeout(() => sendCmd(`--${c.id}`), i * 150));
-    document.getElementById('sendBtn').onclick = () => { const i = document.getElementById('cmd-input'); sendCmd(i.value); i.value=''; };
-    document.getElementById('cmd-input').onkeydown = e => { if(e.key === 'Enter') document.getElementById('sendBtn').click(); };
+
+    window.onload = initUI;
 
     document.addEventListener('click', e => {
-        const btn = e.target;
-        if (btn.classList.contains('ctrl-btn')) sendCmd(btn.dataset.cmd);
-        if (btn.classList.contains('cfg-get')) sendCmd(`--${btn.dataset.id}`);
-        if (btn.classList.contains('cfg-set')) {
-            const val = document.getElementById(`in-${btn.dataset.id}`).value;
-            sendCmd(`--${btn.dataset.id} -set ${val}`);
+        if(e.target.classList.contains('cfg-get')) {
+            const id = e.target.dataset.id;
+            sendCmd(`--${id}`);
+        }
+        if(e.target.classList.contains('cfg-set')) {
+            const id = e.target.dataset.id;
+            const val = document.getElementById(`in-${id}`).value;
+            sendCmd(`--${id} ${val}`);
+        }
+        if(e.target.classList.contains('ctrl-btn')) {
+            sendCmd(e.target.dataset.cmd);
         }
     });
 
-    document.getElementById('file-upload').onchange = e => {
-        const fr = new FileReader();
-        fr.onload = ev => saveFlight(ev.target.result.split(/\r?\n/).filter(l => /^\s*\d/.test(l)));
-        fr.readAsText(e.target.files[0]);
-    };
-
-    navigator.serial.addEventListener('disconnect', forceUIDisconnect);
-    initUI();
-    refreshList();
 </script>
 </body>
 </html>
