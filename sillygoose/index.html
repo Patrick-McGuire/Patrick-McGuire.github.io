@@ -645,7 +645,7 @@
         if(e.target.classList.contains('cfg-set')) {
             const id = e.target.dataset.id;
             const val = document.getElementById(`in-${id}`).value;
-            sendCmd(`--${id} ${val}`);
+            sendCmd(`--${id} -set ${val}`);
         }
         if(e.target.classList.contains('ctrl-btn')) {
             sendCmd(e.target.dataset.cmd);
