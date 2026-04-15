@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serial Monitor</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --bg4: #30363d;
+    --border: #30363d;
+    --border2: #484f58;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --text3: #6e7681;
+    --green: #3fb950;
+    --green-dim: #1a4a25;
+    --red: #f85149;
+    --red-dim: #4a1a1a;
+    --blue: #58a6ff;
+    --blue-dim: #1a2f4a;
+    --amber: #d29922;
+    --amber-dim: #3d2a00;
+    --purple: #a371f7;
+    --purple-dim: #2d1a4a;
+    --cyan: #39d0d8;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    --font-ui: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --radius: 6px;
+    --radius-sm: 4px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top Bar ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  #topbar .logo {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: -0.5px;
+    margin-right: 4px;
+    white-space: nowrap;
+  }
+
+  #topbar select, #topbar input[type=text] {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    outline: none;
+    height: 28px;
+  }
+  #topbar select:focus, #topbar input:focus { border-color: var(--blue); }
+  #topbar select option { background: var(--bg3); }
+
+  #port-select { width: 160px; }
+  #baud-select { width: 110px; }
+  #databits-select, #stopbits-select, #parity-select, #flowcontrol-select { width: 80px; }
+
+  .sep { width: 1px; background: var(--border); height: 20px; margin: 0 4px; flex-shrink: 0; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--bg3);
+    color: var(--text); font-size: 12px; cursor: pointer;
+    font-family: var(--font-ui); height: 28px; white-space: nowrap;
+    transition: background 0.1s, border-color 0.1s;
+    user-select: none;
+  }
+  .btn:hover { background: var(--bg4); border-color: var(--border2); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: #1a3a1a; border-color: var(--green); color: var(--green); }
+  .btn.primary:hover { background: #1f4a1f; }
+  .btn.danger { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .btn.danger:hover { background: #5a1a1a; }
+  .btn.active { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .btn.active:hover { background: #4d3300; }
+  .btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red); display: inline-block; flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(248,81,73,0.2);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 0 2px rgba(63,185,80,0.2); }
+  .status-dot.connecting { background: var(--amber); box-shadow: 0 0 0 2px rgba(210,153,34,0.2); animation: pulse 1s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  #status-label { font-size: 11px; color: var(--text2); }
+
+  #port-refresh-btn { padding: 4px 8px; }
+
+  /* ── Tabs ── */
+  #tabs {
+    display: flex;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text2);
+    border-bottom: 2px solid transparent;
+    user-select: none;
+    transition: color 0.1s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  /* ── Main Content ── */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .tab-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .tab-panel.active { display: flex; }
+
+  /* ── Console Panel ── */
+  #console-toolbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  #console-toolbar label { font-size: 11px; color: var(--text2); }
+  #console-toolbar select {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 2px 6px; border-radius: var(--radius-sm);
+    font-size: 11px; outline: none; height: 22px;
+  }
+  #console-toolbar input[type=checkbox] { cursor: pointer; accent-color: var(--cyan); }
+  .toolbar-sep { width: 1px; background: var(--border); height: 16px; margin: 0 2px; }
+
+  #log-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    background: var(--bg);
+    scroll-behavior: auto;
+  }
+  #log-container::-webkit-scrollbar { width: 8px; }
+  #log-container::-webkit-scrollbar-track { background: var(--bg2); }
+  #log-container::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
+
+  .log-line {
+    padding: 1px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    word-break: break-all;
+  }
+  .log-line:hover { background: rgba(255,255,255,0.02); }
+
+  .ts { color: var(--text3); font-size: 10px; flex-shrink: 0; margin-top: 2px; white-space: nowrap; }
+  .dir { font-size: 10px; flex-shrink: 0; margin-top: 2px; width: 18px; text-align: center; }
+  .log-text { color: var(--text); flex: 1; }
+
+  .log-line.sent .log-text { color: var(--cyan); }
+  .log-line.sent .dir { color: var(--cyan); }
+  .log-line.info .log-text { color: var(--text3); font-style: italic; }
+  .log-line.error .log-text { color: var(--red); }
+  .log-line.warn .log-text { color: var(--amber); }
+
+  /* ── Send Bar ── */
+  #send-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+
+  #send-input {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    height: 32px;
+  }
+  #send-input:focus { border-color: var(--blue); }
+  #send-input:disabled { opacity: 0.4; }
+
+  #send-btn {
+    background: var(--blue-dim); border: 1px solid var(--blue);
+    color: var(--blue); padding: 0 16px; height: 32px;
+    border-radius: var(--radius-sm); cursor: pointer;
+    font-family: var(--font-ui); font-size: 12px;
+    white-space: nowrap; transition: background 0.1s;
+  }
+  #send-btn:hover { background: #1f3f6a; }
+  #send-btn:disabled { opacity: 0.4; cursor: default; }
+
+  #eol-select {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 0 6px; border-radius: var(--radius-sm);
+    font-size: 11px; height: 32px; outline: none;
+  }
+
+  #send-mode-select {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 0 6px; border-radius: var(--radius-sm);
+    font-size: 11px; height: 32px; outline: none;
+  }
+
+  /* ── Hex View Panel ── */
+  #hex-panel {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+  #hex-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  #hex-toolbar label { font-size: 11px; color: var(--text2); }
+  #hex-toolbar select, #hex-toolbar input[type=number] {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 2px 6px; border-radius: var(--radius-sm);
+    font-size: 11px; height: 22px; outline: none; width: 70px;
+  }
+  #hex-container {
+    flex: 1; overflow-y: auto; padding: 8px 12px;
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg); line-height: 1.8;
+  }
+  #hex-container::-webkit-scrollbar { width: 8px; }
+  #hex-container::-webkit-scrollbar-track { background: var(--bg2); }
+  #hex-container::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 4px; }
+  .hex-row { display: flex; gap: 0; align-items: baseline; margin: 1px 0; }
+  .hex-addr { color: var(--text3); width: 60px; flex-shrink: 0; font-size: 11px; }
+  .hex-bytes { flex: 1; display: flex; gap: 3px; flex-wrap: wrap; }
+  .hex-byte {
+    display: inline-block; width: 22px; text-align: center;
+    padding: 0 1px; border-radius: 2px; cursor: pointer;
+    transition: background 0.1s;
+  }
+  .hex-byte:hover { background: var(--bg3); }
+  .hex-byte.printable { color: var(--text); }
+  .hex-byte.zero { color: var(--text3); }
+  .hex-byte.control { color: var(--amber); }
+  .hex-byte.high { color: var(--purple); }
+  .hex-ascii { color: var(--text2); width: 130px; flex-shrink: 0; letter-spacing: 1px; word-break: break-all; }
+  .hex-dir { color: var(--text3); font-size: 10px; width: 14px; flex-shrink: 0; }
+
+  /* ── Plot Panel ── */
+  #plot-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #plot-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  #plot-toolbar label { font-size: 11px; color: var(--text2); }
+  #plot-toolbar input, #plot-toolbar select {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 2px 6px; border-radius: var(--radius-sm);
+    font-size: 11px; height: 22px; outline: none;
+  }
+  #plot-toolbar input[type=number] { width: 60px; }
+  #plot-toolbar input[type=text] { width: 120px; }
+  #plot-area {
+    flex: 1; position: relative; overflow: hidden;
+    background: var(--bg);
+  }
+  #plot-canvas { position: absolute; top: 0; left: 0; }
+  #plot-legend {
+    position: absolute; top: 10px; right: 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    background: rgba(13,17,23,0.85); padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 11px; font-family: var(--font-mono); min-width: 120px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Settings Panel ── */
+  #settings-panel { padding: 20px; overflow-y: auto; flex: 1; }
+  .settings-group { margin-bottom: 24px; }
+  .settings-group h3 { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 13px; color: var(--text); }
+  .setting-desc { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .setting-control { display: flex; align-items: center; gap: 8px; }
+  .toggle {
+    width: 36px; height: 20px; background: var(--bg4); border-radius: 10px;
+    cursor: pointer; position: relative; transition: background 0.2s;
+    border: 1px solid var(--border); flex-shrink: 0;
+  }
+  .toggle.on { background: var(--green-dim); border-color: var(--green); }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--text2); transition: left 0.2s, background 0.2s;
+  }
+  .toggle.on::after { left: 18px; background: var(--green); }
+  .settings-input {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 4px 8px; border-radius: var(--radius-sm);
+    font-size: 12px; outline: none; width: 120px;
+  }
+  .settings-input:focus { border-color: var(--blue); }
+
+  /* ── Stats Bar ── */
+  #stats-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 3px 12px;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--text3);
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  #stats-bar span { white-space: nowrap; }
+  #stats-bar .stat-val { color: var(--text2); }
+  #stats-bar .spacer { flex: 1; }
+
+  /* Scrollbar lock indicator */
+  #scroll-lock-btn {
+    padding: 2px 8px; font-size: 10px; height: 18px; border-radius: 3px;
+    cursor: pointer; background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text3); font-family: var(--font-ui);
+  }
+  #scroll-lock-btn.locked { color: var(--green); border-color: var(--green); }
+
+  .filter-input {
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 2px 8px; border-radius: var(--radius-sm);
+    font-size: 11px; height: 22px; outline: none; width: 140px;
+    font-family: var(--font-mono);
+  }
+  .filter-input:focus { border-color: var(--blue); }
+
+  #byte-count-display { font-family: var(--font-mono); font-size: 10px; }
+
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: var(--font-mono); }
+  .tag.rx { background: var(--bg3); color: var(--text2); }
+  .tag.tx { background: var(--blue-dim); color: var(--blue); }
+
+  @media (max-width: 600px) {
+    #port-select { width: 120px; }
+    #baud-select { width: 90px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <span class="logo">// SERIAL</span>
+  <select id="port-select" title="Serial Port">
+    <option value="">— Select Port —</option>
+  </select>
+  <button class="btn" id="port-refresh-btn" title="Scan for ports">⟳</button>
+  <select id="baud-select" title="Baud Rate">
+    <option>300</option><option>1200</option><option>2400</option>
+    <option>4800</option><option>9600</option><option>19200</option>
+    <option>38400</option><option>57600</option><option selected>115200</option>
+    <option>230400</option><option>460800</option><option>921600</option>
+    <option>1000000</option><option>2000000</option>
+  </select>
+  <select id="databits-select" title="Data Bits">
+    <option>7</option><option selected>8</option>
+  </select>
+  <select id="parity-select" title="Parity">
+    <option value="none" selected>None</option>
+    <option value="even">Even</option>
+    <option value="odd">Odd</option>
+  </select>
+  <select id="stopbits-select" title="Stop Bits">
+    <option selected>1</option><option>2</option>
+  </select>
+  <select id="flowcontrol-select" title="Flow Control">
+    <option value="none" selected>No Flow</option>
+    <option value="hardware">Hardware</option>
+  </select>
+  <div class="sep"></div>
+  <button class="btn primary" id="connect-btn">Connect</button>
+  <div class="sep"></div>
+  <span class="status-dot" id="status-dot"></span>
+  <span id="status-label">Disconnected</span>
+  <div class="sep"></div>
+  <button class="btn" id="logging-btn" title="Start/Stop logging">⏺ Logging</button>
+  <button class="btn" id="save-btn" title="Save log to file">↓ Save</button>
+  <button class="btn" id="clear-btn" title="Clear log">⌫ Clear</button>
+</div>
+
+<!-- TABS -->
+<div id="tabs">
+  <div class="tab active" data-tab="console">Console</div>
+  <div class="tab" data-tab="hex">Hex View</div>
+  <div class="tab" data-tab="plot">Plotter</div>
+  <div class="tab" data-tab="settings">Settings</div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- CONSOLE TAB -->
+  <div class="tab-panel active" id="tab-console">
+    <div id="console-toolbar">
+      <label>Display:</label>
+      <select id="display-mode">
+        <option value="ascii">ASCII</option>
+        <option value="hex">Hex</option>
+        <option value="mixed">Mixed</option>
+        <option value="dec">Decimal</option>
+      </select>
+      <div class="toolbar-sep"></div>
+      <label><input type="checkbox" id="chk-timestamps" checked> Timestamps</label>
+      <label><input type="checkbox" id="chk-autoscroll" checked> Autoscroll</label>
+      <label><input type="checkbox" id="chk-wrap"> Wrap long</label>
+      <div class="toolbar-sep"></div>
+      <label>Filter:</label>
+      <input type="text" class="filter-input" id="filter-input" placeholder="regex or text…">
+      <button class="btn" id="filter-clear-btn" style="padding:2px 6px;height:22px;font-size:10px;">✕</button>
+      <div class="toolbar-sep"></div>
+      <button class="btn" id="scroll-lock-btn" title="Lock scroll to bottom">⤓ Lock</button>
+    </div>
+    <div id="log-container"></div>
+    <div id="send-bar">
+      <select id="send-mode-select" title="Send as">
+        <option value="ascii">ASCII</option>
+        <option value="hex">Hex</option>
+      </select>
+      <input type="text" id="send-input" placeholder="Type command… (↑↓ history, Enter to send)" disabled>
+      <select id="eol-select" title="End of line">
+        <option value="\n">LF</option>
+        <option value="\r\n" selected>CR+LF</option>
+        <option value="\r">CR</option>
+        <option value="">None</option>
+      </select>
+      <button id="send-btn" disabled>Send ↵</button>
+    </div>
+  </div>
+
+  <!-- HEX TAB -->
+  <div class="tab-panel" id="tab-hex">
+    <div id="hex-panel">
+      <div id="hex-toolbar">
+        <label>Width:</label>
+        <input type="number" id="hex-width" value="16" min="8" max="32">
+        <label>Group:</label>
+        <select id="hex-group">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="8">8</option>
+        </select>
+        <div class="toolbar-sep"></div>
+        <label><input type="checkbox" id="hex-show-ascii" checked> ASCII</label>
+        <label><input type="checkbox" id="hex-show-addr" checked> Addr</label>
+        <label><input type="checkbox" id="hex-color" checked> Color</label>
+        <div class="toolbar-sep"></div>
+        <label>Max rows:</label>
+        <input type="number" id="hex-maxrows" value="200" min="10" max="2000">
+        <div class="toolbar-sep"></div>
+        <button class="btn" id="hex-clear-btn" style="height:22px;font-size:11px;padding:0 8px;">Clear</button>
+        <button class="btn" id="hex-save-btn" style="height:22px;font-size:11px;padding:0 8px;">Save Binary</button>
+      </div>
+      <div id="hex-container"></div>
+    </div>
+  </div>
+
+  <!-- PLOTTER TAB -->
+  <div class="tab-panel" id="tab-plot">
+    <div id="plot-panel">
+      <div id="plot-toolbar">
+        <label>Delimiter:</label>
+        <select id="plot-delim">
+          <option value="comma">, comma</option>
+          <option value="space">space</option>
+          <option value="tab">tab</option>
+          <option value="semicolon">; semi</option>
+          <option value="pipe">| pipe</option>
+          <option value="colon">: colon</option>
+        </select>
+        <label>Keys:</label>
+        <input type="text" id="plot-keys" placeholder="a,b,c or auto" title="Channel names, comma-sep, or leave empty for auto">
+        <label>Samples:</label>
+        <input type="number" id="plot-samples" value="200" min="20" max="2000">
+        <div class="toolbar-sep"></div>
+        <label><input type="checkbox" id="plot-autoscale" checked> Autoscale</label>
+        <label>Y-min: <input type="number" id="plot-ymin" value="0" style="width:60px"></label>
+        <label>Y-max: <input type="number" id="plot-ymax" value="100" style="width:60px"></label>
+        <div class="toolbar-sep"></div>
+        <label><input type="checkbox" id="plot-paused"> Pause</label>
+        <button class="btn" id="plot-clear-btn" style="height:22px;font-size:11px;padding:0 8px;">Clear</button>
+        <button class="btn" id="plot-export-btn" style="height:22px;font-size:11px;padding:0 8px;">Export CSV</button>
+      </div>
+      <div id="plot-area">
+        <canvas id="plot-canvas"></canvas>
+        <div id="plot-legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="tab-panel" id="tab-settings">
+    <div id="settings-panel">
+      <div class="settings-group">
+        <h3>Display</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Log max lines</div><div class="setting-desc">Oldest lines removed when limit reached</div></div>
+          <div class="setting-control"><input class="settings-input" type="number" id="s-maxlines" value="5000" min="100" max="50000"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Timestamp format</div></div>
+          <div class="setting-control">
+            <select class="settings-input" id="s-ts-format">
+              <option value="hms">HH:MM:SS</option>
+              <option value="hmsms" selected>HH:MM:SS.mmm</option>
+              <option value="epoch">Unix epoch</option>
+              <option value="rel">Relative (s)</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Font size</div></div>
+          <div class="setting-control"><input class="settings-input" type="number" id="s-fontsize" value="12" min="9" max="24"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Highlight keywords</div><div class="setting-desc">Comma-separated, e.g. ERROR,WARN,OK</div></div>
+          <div class="setting-control"><input class="settings-input" type="text" id="s-highlights" value="ERROR,WARN,OK,FAIL"></div>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>Behavior</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Auto-reconnect</div><div class="setting-desc">Attempt reconnect after disconnect</div></div>
+          <div class="setting-control"><div class="toggle" id="s-autoreconnect" data-on="false"></div></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Reconnect interval (ms)</div></div>
+          <div class="setting-control"><input class="settings-input" type="number" id="s-reconnect-interval" value="2000" min="500"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Echo sent commands</div><div class="setting-desc">Show sent commands in log</div></div>
+          <div class="setting-control"><div class="toggle on" id="s-echo" data-on="true"></div></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Sound on data</div></div>
+          <div class="setting-control"><div class="toggle" id="s-sound" data-on="false"></div></div>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>Logging</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Log file path prefix</div></div>
+          <div class="setting-control"><input class="settings-input" type="text" id="s-logprefix" value="serial_log"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Include metadata header</div><div class="setting-desc">Port info and timestamp at top of log</div></div>
+          <div class="setting-control"><div class="toggle on" id="s-log-header" data-on="true"></div></div>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>About</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Web Serial API</div><div class="setting-desc">Requires Chrome/Edge 89+. No drivers needed.</div></div>
+          <div class="setting-control"><span id="api-support-badge" style="font-size:11px;padding:2px 8px;border-radius:3px;"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- STATS BAR -->
+<div id="stats-bar">
+  <span>RX: <span class="stat-val" id="stat-rx">0 B</span></span>
+  <span>TX: <span class="stat-val" id="stat-tx">0 B</span></span>
+  <span>Rate: <span class="stat-val" id="stat-rate">0 B/s</span></span>
+  <span>Lines: <span class="stat-val" id="stat-lines">0</span></span>
+  <span class="spacer"></span>
+  <span id="stat-logging" style="color:var(--text3)">Logging: OFF</span>
+  <span>|</span>
+  <span id="stat-port">No port</span>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const state = {
+  port: null,
+  reader: null,
+  writer: null,
+  readableStreamClosed: null,
+  writableStreamClosed: null,
+  connected: false,
+  connecting: false,
+  shouldReconnect: false,
+  logLines: [],
+  rawBytes: [],
+  cmdHistory: [],
+  historyIdx: -1,
+  currentDraft: '',
+  rxBytes: 0,
+  txBytes: 0,
+  rxBytesLast: 0,
+  rateInterval: null,
+  loggingActive: false,
+  logBuffer: [],
+  startTime: Date.now(),
+  plotData: {},
+  plotLabels: [],
+  plotBuffer: '',
+  animFrame: null,
+  settings: {
+    maxLines: 5000,
+    tsFormat: 'hmsms',
+    fontSize: 12,
+    highlights: ['ERROR','WARN','OK','FAIL'],
+    autoReconnect: false,
+    reconnectInterval: 2000,
+    echo: true,
+    sound: false,
+    logPrefix: 'serial_log',
+    logHeader: true
+  }
+};
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
+  return (n/1048576).toFixed(2) + ' MB';
+}
+
+function fmtTimestamp() {
+  const now = new Date();
+  const fmt = state.settings.tsFormat;
+  if (fmt === 'epoch') return now.getTime().toString();
+  if (fmt === 'rel') return ((now.getTime() - state.startTime) / 1000).toFixed(3) + 's';
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  const ms = String(now.getMilliseconds()).padStart(3,'0');
+  if (fmt === 'hms') return `${h}:${m}:${s}`;
+  return `${h}:${m}:${s}.${ms}`;
+}
+
+function hexByte(b) { return b.toString(16).toUpperCase().padStart(2,'0'); }
+
+function formatDataForDisplay(bytes, mode) {
+  if (mode === 'hex') return Array.from(bytes).map(hexByte).join(' ');
+  if (mode === 'dec') return Array.from(bytes).map(b=>b.toString()).join(' ');
+  if (mode === 'mixed') {
+    return Array.from(bytes).map(b => {
+      if (b >= 32 && b < 127) return String.fromCharCode(b);
+      return `\\x${hexByte(b)}`;
+    }).join('');
+  }
+  // ascii
+  return Array.from(bytes).map(b => {
+    if (b === 10) return '';
+    if (b === 13) return '';
+    if (b >= 32 && b < 127) return String.fromCharCode(b);
+    if (b === 9) return '\t';
+    return `[${hexByte(b)}]`;
+  }).join('');
+}
+
+// ─── Log System ──────────────────────────────────────────────────────────────
+const logEl = document.getElementById('log-container');
+const filterInput = document.getElementById('filter-input');
+
+function appendLog(text, type = 'rx', raw = null) {
+  const ts = fmtTimestamp();
+  const entry = { text, type, ts, raw };
+  state.logLines.push(entry);
+  if (state.loggingActive) {
+    state.logBuffer.push(`[${ts}][${type.toUpperCase()}] ${text}`);
+  }
+
+  // Trim
+  const max = state.settings.maxLines;
+  while (state.logLines.length > max) {
+    state.logLines.shift();
+    if (logEl.firstChild) logEl.removeChild(logEl.firstChild);
+  }
+
+  if (!passesFilter(text)) return;
+
+  const lineEl = createLogLineEl(entry);
+  logEl.appendChild(lineEl);
+  document.getElementById('stat-lines').textContent = state.logLines.length;
+
+  if (document.getElementById('chk-autoscroll').checked) {
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+function passesFilter(text) {
+  const f = filterInput.value.trim();
+  if (!f) return true;
+  try {
+    return new RegExp(f, 'i').test(text);
+  } catch(e) {
+    return text.toLowerCase().includes(f.toLowerCase());
+  }
+}
+
+function createLogLineEl(entry) {
+  const div = document.createElement('div');
+  div.className = `log-line ${entry.type}`;
+  
+  const showTs = document.getElementById('chk-timestamps').checked;
+  if (showTs) {
+    const ts = document.createElement('span');
+    ts.className = 'ts';
+    ts.textContent = entry.ts;
+    div.appendChild(ts);
+  }
+
+  const dir = document.createElement('span');
+  dir.className = 'dir';
+  dir.textContent = entry.type === 'sent' ? '›' : entry.type === 'info' ? '·' : entry.type === 'error' ? '!' : '‹';
+  div.appendChild(dir);
+
+  const txt = document.createElement('span');
+  txt.className = 'log-text';
+  const wrap = document.getElementById('chk-wrap').checked;
+  if (!wrap) txt.style.whiteSpace = 'pre';
+  
+  // Highlight keywords
+  let displayText = entry.text;
+  const highlights = state.settings.highlights;
+  if (highlights.length && entry.type === 'rx') {
+    const escaped = highlights.map(h => h.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
+    try {
+      displayText = entry.text.replace(new RegExp(`(${escaped})`, 'gi'), (m) => {
+        const lm = m.toLowerCase();
+        const color = lm.includes('error') || lm.includes('fail') ? 'var(--red)' :
+                      lm.includes('warn') ? 'var(--amber)' : 'var(--green)';
+        return `\x00HIGHLIGHT:${color}:${m}\x00`;
+      });
+      txt.innerHTML = '';
+      displayText.split('\x00').forEach(part => {
+        if (part.startsWith('HIGHLIGHT:')) {
+          const [, color, text] = part.match(/HIGHLIGHT:([^:]+):(.+)/);
+          const span = document.createElement('span');
+          span.style.color = color;
+          span.style.fontWeight = '500';
+          span.textContent = text;
+          txt.appendChild(span);
+        } else if (part) {
+          txt.appendChild(document.createTextNode(part));
+        }
+      });
+      div.appendChild(txt);
+      return div;
+    } catch(e) {}
+  }
+  
+  txt.textContent = displayText;
+  div.appendChild(txt);
+  return div;
+}
+
+function rebuildLog() {
+  logEl.innerHTML = '';
+  state.logLines.forEach(e => {
+    if (passesFilter(e.text)) logEl.appendChild(createLogLineEl(e));
+  });
+  if (document.getElementById('chk-autoscroll').checked) logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ─── Hex View ────────────────────────────────────────────────────────────────
+const hexContainer = document.getElementById('hex-container');
+const HEX_CHUNK_SIZE = () => parseInt(document.getElementById('hex-width').value) || 16;
+let hexRowAddr = 0;
+
+function appendHex(bytes, dir = 'rx') {
+  const maxRows = parseInt(document.getElementById('hex-maxrows').value) || 200;
+  const width = HEX_CHUNK_SIZE();
+  const showAscii = document.getElementById('hex-show-ascii').checked;
+  const showAddr = document.getElementById('hex-show-addr').checked;
+  const colorize = document.getElementById('hex-color').checked;
+  const groupSize = parseInt(document.getElementById('hex-group').value) || 4;
+
+  const arr = Array.from(bytes);
+  for (let i = 0; i < arr.length; i += width) {
+    const chunk = arr.slice(i, i + width);
+    const row = document.createElement('div');
+    row.className = 'hex-row';
+
+    if (showAddr) {
+      const addrEl = document.createElement('span');
+      addrEl.className = 'hex-addr';
+      addrEl.textContent = hexRowAddr.toString(16).toUpperCase().padStart(8,'0') + ':';
+      row.appendChild(addrEl);
+    }
+
+    const dirEl = document.createElement('span');
+    dirEl.className = 'hex-dir';
+    dirEl.textContent = dir === 'rx' ? '‹' : '›';
+    dirEl.style.color = dir === 'rx' ? 'var(--text3)' : 'var(--cyan)';
+    row.appendChild(dirEl);
+
+    const bytesEl = document.createElement('span');
+    bytesEl.className = 'hex-bytes';
+    chunk.forEach((b, bi) => {
+      const byteEl = document.createElement('span');
+      byteEl.className = 'hex-byte';
+      byteEl.textContent = hexByte(b);
+      if (colorize) {
+        if (b === 0) byteEl.classList.add('zero');
+        else if (b < 32 || b === 127) byteEl.classList.add('control');
+        else if (b > 127) byteEl.classList.add('high');
+        else byteEl.classList.add('printable');
+      }
+      if ((bi + 1) % groupSize === 0) byteEl.style.marginRight = '6px';
+      byteEl.title = `0x${hexByte(b)} = ${b} = ${b < 32 ? '(ctrl)' : String.fromCharCode(b)}`;
+      bytesEl.appendChild(byteEl);
+    });
+
+    // Pad to full width
+    for (let p = chunk.length; p < width; p++) {
+      const pad = document.createElement('span');
+      pad.className = 'hex-byte';
+      pad.textContent = '  ';
+      bytesEl.appendChild(pad);
+    }
+    row.appendChild(bytesEl);
+
+    if (showAscii) {
+      const asciiEl = document.createElement('span');
+      asciiEl.className = 'hex-ascii';
+      asciiEl.textContent = chunk.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+      row.appendChild(asciiEl);
+    }
+
+    hexContainer.appendChild(row);
+    hexRowAddr += chunk.length;
+
+    // Trim rows
+    while (hexContainer.children.length > maxRows) hexContainer.removeChild(hexContainer.firstChild);
+  }
+  hexContainer.scrollTop = hexContainer.scrollHeight;
+}
+
+// ─── Plot System ─────────────────────────────────────────────────────────────
+const plotCanvas = document.getElementById('plot-canvas');
+const plotCtx = plotCanvas.getContext('2d');
+const plotLegend = document.getElementById('plot-legend');
+const PLOT_COLORS = ['#58a6ff','#3fb950','#f85149','#d29922','#a371f7','#39d0d8','#ff7b72','#ffa657'];
+
+let plotAnimRequested = false;
+
+function resizePlotCanvas() {
+  const area = document.getElementById('plot-area');
+  plotCanvas.width = area.clientWidth;
+  plotCanvas.height = area.clientHeight;
+  drawPlot();
+}
+
+function parsePlotLine(line) {
+  const delimMap = { comma: /,/, space: /\s+/, tab: /\t/, semicolon: /;/, pipe: /\|/, colon: /:/ };
+  const delimKey = document.getElementById('plot-delim').value;
+  const delim = delimMap[delimKey] || /,/;
+  const parts = line.trim().split(delim).map(p => p.trim());
+  
+  const keysRaw = document.getElementById('plot-keys').value.trim();
+  let keys = keysRaw ? keysRaw.split(',').map(k=>k.trim()) : null;
+  
+  const maxSamples = parseInt(document.getElementById('plot-samples').value) || 200;
+
+  let startIdx = 0;
+  let foundNaN = false;
+  // Check if first part might be a label/key=value format
+  const kvParts = parts.filter(p => /^[\w.]+\s*=\s*[-\d.]+$/.test(p));
+  if (kvParts.length > 0 && kvParts.length === parts.length) {
+    // key=value format
+    kvParts.forEach(kv => {
+      const [k, v] = kv.split('=').map(s=>s.trim());
+      const num = parseFloat(v);
+      if (!isNaN(num)) {
+        if (!state.plotData[k]) state.plotData[k] = [];
+        state.plotData[k].push(num);
+        if (state.plotData[k].length > maxSamples) state.plotData[k].shift();
+      }
+    });
+    return;
+  }
+
+  const nums = parts.map(p => parseFloat(p));
+  if (nums.every(n => isNaN(n))) return;
+
+  nums.forEach((n, i) => {
+    if (isNaN(n)) return;
+    const key = keys ? (keys[i] || `ch${i}`) : `ch${i}`;
+    if (!state.plotData[key]) state.plotData[key] = [];
+    state.plotData[key].push(n);
+    if (state.plotData[key].length > maxSamples) state.plotData[key].shift();
+  });
+}
+
+function drawPlot() {
+  const w = plotCanvas.width, h = plotCanvas.height;
+  if (!w || !h) return;
+  const ctx = plotCtx;
+  ctx.clearRect(0, 0, w, h);
+
+  const PAD = { top: 20, right: 160, bottom: 35, left: 55 };
+  const plotW = w - PAD.left - PAD.right;
+  const plotH = h - PAD.top - PAD.bottom;
+
+  if (plotW < 20 || plotH < 20) return;
+
+  // Background grid
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 0.5;
+
+  const keys = Object.keys(state.plotData);
+  if (keys.length === 0) {
+    ctx.fillStyle = '#6e7681';
+    ctx.font = '13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for data…', w/2, h/2);
+    return;
+  }
+
+  // Y range
+  let yMin, yMax;
+  const autoscale = document.getElementById('plot-autoscale').checked;
+  if (autoscale) {
+    yMin = Infinity; yMax = -Infinity;
+    keys.forEach(k => {
+      state.plotData[k].forEach(v => { if (v < yMin) yMin = v; if (v > yMax) yMax = v; });
+    });
+    if (yMin === yMax) { yMin -= 1; yMax += 1; }
+    const margin = (yMax - yMin) * 0.1;
+    yMin -= margin; yMax += margin;
+  } else {
+    yMin = parseFloat(document.getElementById('plot-ymin').value) || 0;
+    yMax = parseFloat(document.getElementById('plot-ymax').value) || 100;
+  }
+
+  const yRange = yMax - yMin || 1;
+  const maxSamples = parseInt(document.getElementById('plot-samples').value) || 200;
+
+  // Grid lines
+  const gridLines = 6;
+  for (let i = 0; i <= gridLines; i++) {
+    const y = PAD.top + plotH - (i / gridLines) * plotH;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + plotW, y);
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 0.5; ctx.stroke();
+    const val = yMin + (i / gridLines) * yRange;
+    ctx.fillStyle = '#6e7681'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(1), PAD.left - 6, y + 3);
+  }
+
+  // X grid
+  const xGrids = 10;
+  for (let i = 0; i <= xGrids; i++) {
+    const x = PAD.left + (i / xGrids) * plotW;
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, PAD.top + plotH);
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 0.5; ctx.stroke();
+  }
+
+  // Border
+  ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
+  ctx.strokeRect(PAD.left, PAD.top, plotW, plotH);
+
+  // Plot each series
+  keys.forEach((key, ki) => {
+    const data = state.plotData[key];
+    if (data.length < 2) return;
+    const color = PLOT_COLORS[ki % PLOT_COLORS.length];
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+
+    data.forEach((v, i) => {
+      const x = PAD.left + (i / (maxSamples - 1)) * plotW;
+      const y = PAD.top + plotH - ((v - yMin) / yRange) * plotH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Last value dot
+    const lv = data[data.length-1];
+    const lx = PAD.left + ((data.length-1) / (maxSamples-1)) * plotW;
+    const ly = PAD.top + plotH - ((lv - yMin) / yRange) * plotH;
+    ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+  });
+
+  // Legend
+  plotLegend.innerHTML = '';
+  keys.forEach((key, ki) => {
+    const data = state.plotData[key];
+    const last = data.length ? data[data.length-1] : 0;
+    const color = PLOT_COLORS[ki % PLOT_COLORS.length];
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<span class="legend-dot" style="background:${color}"></span><span style="color:${color}">${key}</span><span style="color:var(--text2);margin-left:auto;padding-left:8px">${last.toFixed(2)}</span>`;
+    plotLegend.appendChild(item);
+  });
+}
+
+function schedulePlotDraw() {
+  if (!plotAnimRequested) {
+    plotAnimRequested = true;
+    requestAnimationFrame(() => { plotAnimRequested = false; drawPlot(); });
+  }
+}
+
+// ─── Serial Connection ────────────────────────────────────────────────────────
+const connectBtn = document.getElementById('connect-btn');
+const statusDot = document.getElementById('status-dot');
+const statusLabel = document.getElementById('status-label');
+const sendInput = document.getElementById('send-input');
+const sendBtn = document.getElementById('send-btn');
+
+function setStatus(s) {
+  statusDot.className = 'status-dot ' + s;
+  if (s === 'connected') { statusLabel.textContent = 'Connected'; connectBtn.textContent = 'Disconnect'; connectBtn.className = 'btn danger'; }
+  else if (s === 'connecting') { statusLabel.textContent = 'Connecting…'; connectBtn.textContent = 'Cancel'; connectBtn.className = 'btn'; }
+  else { statusLabel.textContent = 'Disconnected'; connectBtn.textContent = 'Connect'; connectBtn.className = 'btn primary'; }
+  const isConn = s === 'connected';
+  sendInput.disabled = !isConn;
+  sendBtn.disabled = !isConn;
+}
+
+async function connect() {
+  if (!navigator.serial) {
+    appendLog('Web Serial API not supported. Use Chrome/Edge 89+.', 'error');
+    return;
+  }
+
+  if (state.connected) { await disconnect(false); return; }
+  if (state.connecting) return;
+
+  try {
+    state.connecting = true;
+    setStatus('connecting');
+    appendLog('Requesting serial port…', 'info');
+
+    let port;
+    const portSel = document.getElementById('port-select').value;
+    const ports = await navigator.serial.getPorts();
+    
+    if (portSel && ports.length) {
+      port = ports.find(p => {
+        const info = p.getInfo();
+        return `${info.usbVendorId}:${info.usbProductId}` === portSel;
+      }) || await navigator.serial.requestPort();
+    } else {
+      port = await navigator.serial.requestPort();
+    }
+
+    const baud = parseInt(document.getElementById('baud-select').value);
+    const dataBits = parseInt(document.getElementById('databits-select').value);
+    const stopBits = parseInt(document.getElementById('stopbits-select').value);
+    const parity = document.getElementById('parity-select').value;
+    const flowControl = document.getElementById('flowcontrol-select').value;
+
+    await port.open({ baudRate: baud, dataBits, stopBits, parity, flowControl });
+
+    state.port = port;
+    state.connected = true;
+    state.connecting = false;
+    state.shouldReconnect = true;
+    state.rxBytes = 0; state.txBytes = 0;
+    hexRowAddr = 0;
+
+    const info = port.getInfo();
+    const portLabel = info.usbVendorId ? `USB ${info.usbVendorId.toString(16)}:${info.usbProductId.toString(16)}` : 'Serial Port';
+    document.getElementById('stat-port').textContent = `${portLabel} @ ${baud}`;
+    appendLog(`Connected: ${portLabel} @ ${baud} baud`, 'info');
+
+    setStatus('connected');
+
+    // Start reading
+    readLoop();
+
+  } catch(e) {
+    state.connecting = false;
+    setStatus('');
+    if (e.name !== 'NotFoundError') {
+      appendLog(`Connection failed: ${e.message}`, 'error');
+    } else {
+      appendLog('Port selection cancelled.', 'info');
+    }
+  }
+}
+
+async function readLoop() {
+  const port = state.port;
+  while (port.readable && state.connected) {
+    state.reader = port.readable.getReader();
+    try {
+      while (true) {
+        const { value, done } = await state.reader.read();
+        if (done) break;
+        if (value) processIncomingBytes(value);
+      }
+    } catch(e) {
+      if (state.connected) {
+        appendLog(`Read error: ${e.message}`, 'error');
+        await handleDisconnect();
+      }
+    } finally {
+      try { state.reader.releaseLock(); } catch(e) {}
+      state.reader = null;
+    }
+  }
+}
+
+let rxBuffer = '';
+
+function processIncomingBytes(bytes) {
+  state.rxBytes += bytes.length;
+  state.rawBytes.push(...bytes);
+
+  // Hex view
+  appendHex(bytes, 'rx');
+
+  // Decode as UTF-8 text
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  const mode = document.getElementById('display-mode').value;
+  
+  rxBuffer += text;
+  
+  // Split on newlines, but keep last partial line in buffer
+  const lines = rxBuffer.split('\n');
+  rxBuffer = lines.pop();
+
+  lines.forEach(line => {
+    line = line.replace(/\r$/, '');
+    if (line === '') return;
+    
+    let display = line;
+    if (mode !== 'ascii') {
+      const enc = new TextEncoder().encode(line);
+      display = formatDataForDisplay(enc, mode);
+    }
+    appendLog(display, 'rx');
+    
+    // Feed to plotter
+    if (!document.getElementById('plot-paused').checked) {
+      parsePlotLine(line);
+      schedulePlotDraw();
+    }
+  });
+
+  updateStats();
+}
+
+async function handleDisconnect(userInitiated = false) {
+  const wasConnected = state.connected;
+  state.connected = false;
+  state.connecting = false;
+
+  try {
+    if (state.reader) { await state.reader.cancel(); state.reader = null; }
+  } catch(e) {}
+
+  try {
+    if (state.writer) { await state.writer.close(); state.writer = null; }
+  } catch(e) {}
+
+  try {
+    if (state.port) { await state.port.close(); }
+  } catch(e) {}
+
+  state.port = null;
+  setStatus('');
+  document.getElementById('stat-port').textContent = 'No port';
+
+  if (wasConnected) appendLog(userInitiated ? 'Disconnected.' : 'Port disconnected (device removed?)', 'info');
+
+  if (!userInitiated && state.shouldReconnect && state.settings.autoReconnect) {
+    appendLog(`Auto-reconnect in ${state.settings.reconnectInterval}ms…`, 'info');
+    setTimeout(() => { if (!state.connected) connect(); }, state.settings.reconnectInterval);
+  }
+}
+
+async function disconnect(userInitiated = true) {
+  state.shouldReconnect = false;
+  await handleDisconnect(userInitiated);
+}
+
+// Watch for serial port disconnection events
+if (navigator.serial) {
+  navigator.serial.addEventListener('disconnect', (e) => {
+    if (state.port && e.target === state.port) {
+      handleDisconnect(false);
+    }
+  });
+}
+
+// ─── Send ─────────────────────────────────────────────────────────────────────
+async function send() {
+  if (!state.connected || !state.port) return;
+  const raw = sendInput.value;
+  if (!raw) return;
+
+  const eol = document.getElementById('eol-select').value.replace('\\n','\n').replace('\\r','\r').replace('\\r\\n','\r\n');
+  const mode = document.getElementById('send-mode-select').value;
+
+  let bytes;
+  if (mode === 'hex') {
+    const hex = raw.replace(/\s+/g,'');
+    if (!/^[0-9a-fA-F]*$/.test(hex)) { appendLog('Invalid hex string', 'error'); return; }
+    bytes = new Uint8Array(hex.match(/.{1,2}/g).map(h=>parseInt(h,16)));
+  } else {
+    bytes = new TextEncoder().encode(raw + eol.replace('\\n','\n').replace('\\r','\r').replace('\\r\\n','\r\n'));
+  }
+
+  try {
+    const writer = state.port.writable.getWriter();
+    await writer.write(bytes);
+    writer.releaseLock();
+    state.txBytes += bytes.length;
+
+    if (state.settings.echo) appendLog(raw, 'sent');
+    appendHex(bytes, 'tx');
+
+    // History
+    if (state.cmdHistory[0] !== raw) {
+      state.cmdHistory.unshift(raw);
+      if (state.cmdHistory.length > 200) state.cmdHistory.pop();
+    }
+    state.historyIdx = -1;
+    state.currentDraft = '';
+    sendInput.value = '';
+    updateStats();
+  } catch(e) {
+    appendLog(`Send error: ${e.message}`, 'error');
+    if (e.name === 'InvalidStateError') await handleDisconnect(false);
+  }
+}
+
+// ─── Port Scanner ─────────────────────────────────────────────────────────────
+async function refreshPorts() {
+  if (!navigator.serial) return;
+  const ports = await navigator.serial.getPorts();
+  const sel = document.getElementById('port-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Select Port —</option>';
+  ports.forEach((p, i) => {
+    const info = p.getInfo();
+    const id = `${info.usbVendorId}:${info.usbProductId}`;
+    const label = info.usbVendorId ? `USB ${id}` : `Port ${i+1}`;
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = label;
+    if (id === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+// ─── Stats ───────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stat-rx').textContent = fmtBytes(state.rxBytes);
+  document.getElementById('stat-tx').textContent = fmtBytes(state.txBytes);
+}
+
+setInterval(() => {
+  const rate = state.rxBytes - state.rxBytesLast;
+  state.rxBytesLast = state.rxBytes;
+  document.getElementById('stat-rate').textContent = fmtBytes(rate) + '/s';
+}, 1000);
+
+// ─── Logging ─────────────────────────────────────────────────────────────────
+function toggleLogging() {
+  state.loggingActive = !state.loggingActive;
+  const btn = document.getElementById('logging-btn');
+  const lbl = document.getElementById('stat-logging');
+  if (state.loggingActive) {
+    btn.classList.add('active');
+    lbl.textContent = 'Logging: ON';
+    lbl.style.color = 'var(--amber)';
+    state.logBuffer = [];
+    appendLog('Logging started.', 'info');
+  } else {
+    btn.classList.remove('active');
+    lbl.textContent = 'Logging: OFF';
+    lbl.style.color = 'var(--text3)';
+    appendLog('Logging stopped.', 'info');
+  }
+}
+
+function saveLog() {
+  const lines = state.logLines.map(e => {
+    const ts = `[${e.ts}]`;
+    const dir = `[${e.type.toUpperCase()}]`;
+    return `${ts}${dir} ${e.text}`;
+  });
+  
+  if (state.settings.logHeader) {
+    const header = [
+      `# Serial Monitor Log`,
+      `# Date: ${new Date().toISOString()}`,
+      `# Port: ${document.getElementById('stat-port').textContent}`,
+      `# RX: ${fmtBytes(state.rxBytes)}  TX: ${fmtBytes(state.txBytes)}`,
+      ''
+    ];
+    lines.unshift(...header);
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${state.settings.logPrefix}_${new Date().toISOString().replace(/[:.]/g,'-')}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearLog() {
+  state.logLines = [];
+  logEl.innerHTML = '';
+  state.rxBytes = 0; state.txBytes = 0;
+  document.getElementById('stat-lines').textContent = '0';
+  updateStats();
+}
+
+// ─── Event Wiring ─────────────────────────────────────────────────────────────
+connectBtn.addEventListener('click', connect);
+document.getElementById('save-btn').addEventListener('click', saveLog);
+document.getElementById('clear-btn').addEventListener('click', clearLog);
+document.getElementById('logging-btn').addEventListener('click', toggleLogging);
+document.getElementById('port-refresh-btn').addEventListener('click', refreshPorts);
+
+sendBtn.addEventListener('click', send);
+sendInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { send(); return; }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (state.historyIdx === -1) state.currentDraft = sendInput.value;
+    if (state.historyIdx < state.cmdHistory.length - 1) {
+      state.historyIdx++;
+      sendInput.value = state.cmdHistory[state.historyIdx];
+      setTimeout(() => sendInput.setSelectionRange(sendInput.value.length, sendInput.value.length), 0);
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (state.historyIdx > 0) {
+      state.historyIdx--;
+      sendInput.value = state.cmdHistory[state.historyIdx];
+    } else if (state.historyIdx === 0) {
+      state.historyIdx = -1;
+      sendInput.value = state.currentDraft;
+    }
+    setTimeout(() => sendInput.setSelectionRange(sendInput.value.length, sendInput.value.length), 0);
+  }
+});
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const id = tab.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(`tab-${id}`).classList.add('active');
+    if (id === 'plot') { resizePlotCanvas(); }
+  });
+});
+
+// Filter
+filterInput.addEventListener('input', () => rebuildLog());
+document.getElementById('filter-clear-btn').addEventListener('click', () => { filterInput.value = ''; rebuildLog(); });
+
+// Checkboxes that affect display
+['chk-timestamps','chk-wrap'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => rebuildLog());
+});
+
+// Autoscroll
+document.getElementById('chk-autoscroll').addEventListener('change', e => {
+  if (e.target.checked) logEl.scrollTop = logEl.scrollHeight;
+});
+
+// Scroll lock btn
+document.getElementById('scroll-lock-btn').addEventListener('click', function() {
+  const autoChk = document.getElementById('chk-autoscroll');
+  autoChk.checked = !autoChk.checked;
+  this.classList.toggle('locked', autoChk.checked);
+  this.textContent = autoChk.checked ? '⤓ Auto' : '⤓ Lock';
+  if (autoChk.checked) logEl.scrollTop = logEl.scrollHeight;
+});
+
+// Hex controls
+['hex-width','hex-group','hex-show-ascii','hex-show-addr','hex-color'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {});
+});
+document.getElementById('hex-clear-btn').addEventListener('click', () => { hexContainer.innerHTML = ''; hexRowAddr = 0; });
+document.getElementById('hex-save-btn').addEventListener('click', () => {
+  const blob = new Blob([new Uint8Array(state.rawBytes)], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'serial_dump.bin'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Plot controls
+document.getElementById('plot-clear-btn').addEventListener('click', () => {
+  state.plotData = {}; state.plotBuffer = '';
+  plotLegend.innerHTML = ''; drawPlot();
+});
+
+document.getElementById('plot-export-btn').addEventListener('click', () => {
+  const keys = Object.keys(state.plotData);
+  if (!keys.length) return;
+  const rows = [keys.join(',')];
+  const maxLen = Math.max(...keys.map(k => state.plotData[k].length));
+  for (let i = 0; i < maxLen; i++) {
+    rows.push(keys.map(k => state.plotData[k][i] !== undefined ? state.plotData[k][i] : '').join(','));
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'plot_data.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+['plot-autoscale','plot-samples','plot-ymin','plot-ymax','plot-delim','plot-keys'].forEach(id => {
+  document.getElementById(id).addEventListener('change', schedulePlotDraw);
+});
+
+// Settings toggles
+document.querySelectorAll('.toggle').forEach(toggle => {
+  toggle.addEventListener('click', () => {
+    const on = toggle.dataset.on === 'true';
+    toggle.dataset.on = (!on).toString();
+    toggle.classList.toggle('on', !on);
+    applySettings();
+  });
+});
+
+// Settings inputs
+['s-maxlines','s-ts-format','s-fontsize','s-highlights','s-reconnect-interval','s-logprefix'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', applySettings);
+});
+
+function applySettings() {
+  state.settings.maxLines = parseInt(document.getElementById('s-maxlines').value) || 5000;
+  state.settings.tsFormat = document.getElementById('s-ts-format').value;
+  state.settings.fontSize = parseInt(document.getElementById('s-fontsize').value) || 12;
+  state.settings.highlights = document.getElementById('s-highlights').value.split(',').map(s=>s.trim()).filter(Boolean);
+  state.settings.autoReconnect = document.getElementById('s-autoreconnect').dataset.on === 'true';
+  state.settings.reconnectInterval = parseInt(document.getElementById('s-reconnect-interval').value) || 2000;
+  state.settings.echo = document.getElementById('s-echo').dataset.on === 'true';
+  state.settings.logPrefix = document.getElementById('s-logprefix').value || 'serial_log';
+  state.settings.logHeader = document.getElementById('s-log-header').dataset.on === 'true';
+  logEl.style.fontSize = state.settings.fontSize + 'px';
+  hexContainer.style.fontSize = state.settings.fontSize + 'px';
+}
+
+// Display mode
+document.getElementById('display-mode').addEventListener('change', rebuildLog);
+
+// Font size
+document.getElementById('s-fontsize').addEventListener('input', applySettings);
+
+// Resize observer for plot
+const resizeObs = new ResizeObserver(() => {
+  const active = document.querySelector('.tab-panel.active');
+  if (active && active.id === 'tab-plot') resizePlotCanvas();
+});
+resizeObs.observe(document.getElementById('plot-area'));
+
+// ─── Startup ─────────────────────────────────────────────────────────────────
+function init() {
+  const supported = 'serial' in navigator;
+  const badge = document.getElementById('api-support-badge');
+  if (supported) {
+    badge.textContent = 'Supported';
+    badge.style.background = 'var(--green-dim)';
+    badge.style.color = 'var(--green)';
+  } else {
+    badge.textContent = 'Not supported';
+    badge.style.background = 'var(--red-dim)';
+    badge.style.color = 'var(--red)';
+    connectBtn.disabled = true;
+    appendLog('Web Serial API not available. Please use Chrome or Edge 89+.', 'error');
+  }
+
+  appendLog('Serial Monitor ready. Select a port and click Connect.', 'info');
+  appendLog('Tip: Use ↑↓ arrow keys in the send box to navigate command history.', 'info');
+  refreshPorts();
+  setStatus('');
+  applySettings();
+}
+
+init();
+
+})();
+</script>
+</body>
+</html>
