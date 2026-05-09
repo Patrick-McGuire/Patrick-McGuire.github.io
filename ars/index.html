@@ -2,48 +2,533 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ARS Console</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
-  #app { width: 100%; height: 100vh; border: 0; display: block; }
-  #status {
-    position: fixed; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    color: #b8c0c8; font-family: ui-monospace, Consolas, monospace; font-size: 13px;
-    text-align: center; padding: 20px;
+  :root {
+    --bg: #0f1115;
+    --panel: #161922;
+    --panel-2: #1d212c;
+    --border: #2a2f3c;
+    --text: #e6e6e6;
+    --muted: #8a93a3;
+    --accent: #4ea1ff;
+    --accent-hot: #2c7fdb;
+    --good: #4ed29a;
+    --bad: #ff6b6b;
+    --warn: #f0c14b;
+    --mono: ui-monospace, "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   }
-  #status .title { color: #4ea1ff; font-size: 16px; margin-bottom: 6px; font-weight: 600; }
-  #status .err { color: #ff6b6b; margin-top: 6px; }
-  #status code { background: #1d212c; padding: 2px 6px; border-radius: 3px; word-break: break-all; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    font-size: 12px; color: var(--muted);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.connected { background: var(--good); }
+  button {
+    background: var(--accent); color: #fff; border: 0;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-weight: 500;
+  }
+  button:hover:not(:disabled) { background: var(--accent-hot); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  button.secondary:hover:not(:disabled) { background: #2a2f3c; }
+  button.danger { background: var(--bad); }
+  main {
+    max-width: 1100px; margin: 0 auto; padding: 16px;
+    display: grid; gap: 16px;
+    grid-template-columns: 1fr 1fr;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px;
+  }
+  .panel h2 {
+    margin: 0 0 10px; font-size: 13px; font-weight: 600;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .panel.full { grid-column: 1 / -1; }
+  .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .row label { color: var(--muted); width: 80px; flex-shrink: 0; font-size: 12px; }
+  .row .value { font-family: var(--mono); flex: 1; }
+  .row input[type="number"], .row input[type="text"] {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 4px 8px; border-radius: 4px;
+    font-family: var(--mono); width: 140px;
+  }
+  .row .grow { flex: 1; }
+  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  table {
+    width: 100%; border-collapse: collapse; font-family: var(--mono);
+    font-size: 12px;
+  }
+  th, td {
+    text-align: left; padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 500; }
+  .log-table-wrap {
+    max-height: 320px; overflow: auto;
+    border: 1px solid var(--border); border-radius: 4px;
+  }
+  .console {
+    background: #000; color: #b8c0c8;
+    font-family: var(--mono); font-size: 12px;
+    height: 280px; overflow-y: auto;
+    padding: 8px; border-radius: 4px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .console .tx { color: var(--accent); }
+  .console .err { color: var(--bad); }
+  .console .warn { color: var(--warn); }
+  .console-input {
+    display: flex; gap: 6px; margin-top: 6px;
+  }
+  .console-input input {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 10px; border-radius: 4px;
+    font-family: var(--mono);
+  }
+  .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: var(--panel-2); color: var(--muted);
+    font-size: 11px; font-family: var(--mono);
+  }
+  .empty { color: var(--muted); padding: 12px; text-align: center; font-style: italic; }
+  .unsupported {
+    background: #3a2020; border: 1px solid #6a3030; color: #ffb0b0;
+    padding: 12px; border-radius: 6px; margin: 16px;
+  }
 </style>
 </head>
 <body>
-<div id="status"><div><div class="title">ARS Console</div><div>Loading…</div></div></div>
-<iframe id="app" allow="serial" hidden></iframe>
+<header>
+  <h1>ARS Console</h1>
+  <span class="status-pill"><span id="dot" class="dot"></span><span id="status">Disconnected</span></span>
+  <button id="connectBtn">Connect</button>
+  <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+</header>
+
+<div id="unsupported" class="unsupported" style="display:none">
+  Web Serial API is not available in this browser. Use Chrome, Edge, or another Chromium-based browser.
+</div>
+
+<main>
+  <section class="panel">
+    <h2>Time</h2>
+    <div class="row">
+      <label>Device</label>
+      <span class="value" id="deviceTime">—</span>
+    </div>
+    <div class="row">
+      <label>Unix</label>
+      <span class="value" id="deviceUnix">—</span>
+    </div>
+    <div class="row">
+      <label>Drift</label>
+      <span class="value" id="timeDrift">—</span>
+    </div>
+    <div class="toolbar">
+      <button id="readTimeBtn" disabled>Read</button>
+      <button id="syncTimeBtn" disabled>Sync to Now</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Battery</h2>
+    <div class="row">
+      <label>Voltage</label>
+      <span class="value" id="battery">—</span>
+    </div>
+    <div class="toolbar">
+      <button id="readBatBtn" disabled>Read</button>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Configuration</h2>
+    <div class="row">
+      <label>Version</label>
+      <span class="value" id="cfgVersion">—</span>
+    </div>
+    <div class="row">
+      <label>ID</label>
+      <input id="cfgId" type="number" min="0" max="65535" disabled>
+      <button id="setIdBtn" disabled>Save</button>
+      <span class="badge" id="cfgIdCurrent"></span>
+    </div>
+    <div class="row">
+      <label>Sleep (s)</label>
+      <input id="cfgSleep" type="number" min="0" max="65535" disabled>
+      <button id="setSleepBtn" disabled>Save</button>
+      <span class="badge" id="cfgSleepCurrent"></span>
+    </div>
+    <div class="row">
+      <label>Awake (s)</label>
+      <input id="cfgAwake" type="number" min="0" max="65535" disabled>
+      <button id="setAwakeBtn" disabled>Save</button>
+      <span class="badge" id="cfgAwakeCurrent"></span>
+    </div>
+    <div class="toolbar">
+      <button id="readConfigBtn" disabled>Refresh</button>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Event Log <span class="badge" id="logCount">count: 0</span></h2>
+    <div class="toolbar">
+      <button id="readLogCountBtn" disabled>Refresh Count</button>
+      <button id="dumpLogBtn" disabled>Dump All</button>
+      <button id="downloadCsvBtn" class="secondary" disabled>Download CSV</button>
+      <button id="clearLogTableBtn" class="secondary" disabled>Clear Table</button>
+    </div>
+    <div class="log-table-wrap">
+      <table>
+        <thead><tr>
+          <th>idx</th><th>type</th><th>attr</th><th>time (UTC)</th><th>unix</th><th>value</th>
+        </tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <div class="empty" id="logEmpty">No entries loaded. Click "Dump All" to fetch.</div>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Console</h2>
+    <div class="console" id="console"></div>
+    <form class="console-input" id="consoleForm">
+      <input id="consoleInput" type="text" placeholder='e.g. --config, --time -setUnix 1715300000' autocomplete="off" disabled>
+      <button type="submit" id="consoleSendBtn" disabled>Send</button>
+      <button type="button" id="consoleClearBtn" class="secondary">Clear</button>
+    </form>
+  </section>
+</main>
+
 <script>
 'use strict';
-const SRC = 'https://raw.githubusercontent.com/Patrick-McGuire/acoustic_release_system/main/ars_platformio/tools/ars_console.html';
-const status = document.getElementById('status');
-const app = document.getElementById('app');
 
-fetch(SRC + '?cb=' + Date.now(), { cache: 'no-store' })
-  .then(r => {
-    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
-    return r.text();
-  })
-  .then(html => {
-    app.srcdoc = html;
-    app.hidden = false;
-    status.style.display = 'none';
-  })
-  .catch(e => {
-    status.innerHTML =
-      '<div><div class="title">ARS Console</div>' +
-      '<div class="err">Failed to load app.</div>' +
-      '<div style="margin-top:6px">' + e.message + '</div>' +
-      '<div style="margin-top:12px">Source: <code>' + SRC + '</code></div></div>';
-  });
+const EVENT_TYPE_NAMES = ['NONE', 'DECODED', 'DECODING_FAILED', 'SLEEP_FAILED', 'BATTERY_STATUS'];
+
+const $ = (id) => document.getElementById(id);
+const ui = {
+  status: $('status'), dot: $('dot'),
+  connectBtn: $('connectBtn'), disconnectBtn: $('disconnectBtn'),
+  deviceTime: $('deviceTime'), deviceUnix: $('deviceUnix'), timeDrift: $('timeDrift'),
+  readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'),
+  battery: $('battery'), readBatBtn: $('readBatBtn'),
+  cfgVersion: $('cfgVersion'),
+  cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'),
+  cfgIdCurrent: $('cfgIdCurrent'),
+  cfgSleepCurrent: $('cfgSleepCurrent'),
+  cfgAwakeCurrent: $('cfgAwakeCurrent'),
+  setIdBtn: $('setIdBtn'), setSleepBtn: $('setSleepBtn'), setAwakeBtn: $('setAwakeBtn'),
+  readConfigBtn: $('readConfigBtn'),
+  logCount: $('logCount'), logBody: $('logBody'), logEmpty: $('logEmpty'),
+  readLogCountBtn: $('readLogCountBtn'), dumpLogBtn: $('dumpLogBtn'),
+  downloadCsvBtn: $('downloadCsvBtn'), clearLogTableBtn: $('clearLogTableBtn'),
+  console: $('console'), consoleInput: $('consoleInput'),
+  consoleSendBtn: $('consoleSendBtn'), consoleClearBtn: $('consoleClearBtn'),
+  consoleForm: $('consoleForm'), unsupported: $('unsupported'),
+};
+
+const state = {
+  port: null, reader: null, writer: null,
+  rxBuf: '', readLoop: null,
+  config: null, deviceUnix: null, deviceUnixReadAt: null,
+  logEntries: [],
+};
+
+function log(text, cls) {
+  const span = document.createElement('span');
+  span.textContent = text + '\n';
+  if (cls) span.className = cls;
+  ui.console.appendChild(span);
+  ui.console.scrollTop = ui.console.scrollHeight;
+}
+
+function setConnected(connected) {
+  ui.status.textContent = connected ? 'Connected' : 'Disconnected';
+  ui.dot.classList.toggle('connected', connected);
+  ui.connectBtn.disabled = connected;
+  ui.disconnectBtn.disabled = !connected;
+  const ctrls = [
+    ui.readTimeBtn, ui.syncTimeBtn, ui.readBatBtn, ui.readConfigBtn,
+    ui.setIdBtn, ui.setSleepBtn, ui.setAwakeBtn,
+    ui.cfgId, ui.cfgSleep, ui.cfgAwake,
+    ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn,
+    ui.consoleInput, ui.consoleSendBtn,
+  ];
+  ctrls.forEach(el => el.disabled = !connected);
+}
+
+async function connect() {
+  if (!navigator.serial) {
+    ui.unsupported.style.display = 'block';
+    return;
+  }
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    state.port = port;
+    state.writer = port.writable.getWriter();
+    state.reader = port.readable.getReader();
+    setConnected(true);
+    log('[connected]', 'tx');
+    state.readLoop = readLoop();
+    // Initial pull
+    setTimeout(() => {
+      send('--config');
+      send('--time');
+      send('--bat');
+      send('--log');
+    }, 100);
+  } catch (e) {
+    log('[connect failed: ' + e.message + ']', 'err');
+  }
+}
+
+async function disconnect() {
+  try {
+    if (state.reader) {
+      try { await state.reader.cancel(); } catch (_) {}
+      try { state.reader.releaseLock(); } catch (_) {}
+    }
+    if (state.writer) {
+      try { state.writer.releaseLock(); } catch (_) {}
+    }
+    if (state.port) {
+      await state.port.close();
+    }
+  } catch (e) {
+    log('[disconnect error: ' + e.message + ']', 'err');
+  } finally {
+    state.port = state.reader = state.writer = null;
+    setConnected(false);
+    log('[disconnected]', 'tx');
+  }
+}
+
+async function readLoop() {
+  const decoder = new TextDecoder();
+  try {
+    while (state.reader) {
+      const { value, done } = await state.reader.read();
+      if (done) break;
+      state.rxBuf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = state.rxBuf.indexOf('\n')) >= 0) {
+        const line = state.rxBuf.slice(0, idx).replace(/\r$/, '');
+        state.rxBuf = state.rxBuf.slice(idx + 1);
+        if (line.length === 0) continue;
+        handleLine(line);
+      }
+    }
+  } catch (e) {
+    if (state.port) log('[read error: ' + e.message + ']', 'err');
+  }
+}
+
+async function send(cmd) {
+  if (!state.writer) return;
+  log('> ' + cmd, 'tx');
+  const data = new TextEncoder().encode(cmd + '\n');
+  try {
+    await state.writer.write(data);
+  } catch (e) {
+    log('[send error: ' + e.message + ']', 'err');
+  }
+}
+
+function handleLine(line) {
+  // Echo back to console with appropriate styling
+  let cls = null;
+  if (line.startsWith('ERROR:')) cls = 'err';
+  else if (line.startsWith('WARN:')) cls = 'warn';
+  log(line, cls);
+
+  // Parse our structured MSG: lines.
+  // Format: "MSG:\tTAG key=val key=val ..."
+  if (!line.startsWith('MSG:')) return;
+  const body = line.slice(line.indexOf('\t') + 1).trim();
+  const parts = body.split(/\s+/);
+  if (parts.length === 0) return;
+  const tag = parts[0];
+  const kv = {};
+  for (let i = 1; i < parts.length; ++i) {
+    const eq = parts[i].indexOf('=');
+    if (eq > 0) kv[parts[i].slice(0, eq)] = parts[i].slice(eq + 1);
+  }
+  switch (tag) {
+    case 'TIME': handleTime(kv); break;
+    case 'CONFIG': handleConfig(kv); break;
+    case 'BAT': handleBat(kv); break;
+    case 'LOG': handleLogCount(kv); break;
+    case 'LOGENTRY': handleLogEntry(kv); break;
+    case 'LOGEND': handleLogEnd(); break;
+  }
+}
+
+function handleTime(kv) {
+  const unix = parseInt(kv.unix, 10);
+  if (!Number.isFinite(unix)) return;
+  state.deviceUnix = unix;
+  state.deviceUnixReadAt = Date.now();
+  ui.deviceUnix.textContent = unix;
+  ui.deviceTime.textContent = new Date(unix * 1000).toISOString().replace('T', ' ').replace(/\..+$/, ' UTC');
+  const drift = unix - Math.floor(Date.now() / 1000);
+  ui.timeDrift.textContent = (drift >= 0 ? '+' : '') + drift + ' s';
+}
+
+function handleConfig(kv) {
+  state.config = {
+    version: parseInt(kv.version, 10),
+    id: parseInt(kv.id, 10),
+    sleep: parseInt(kv.sleep, 10),
+    awake: parseInt(kv.awake, 10),
+  };
+  ui.cfgVersion.textContent = state.config.version;
+  ui.cfgIdCurrent.textContent = 'current: ' + state.config.id;
+  ui.cfgSleepCurrent.textContent = 'current: ' + state.config.sleep;
+  ui.cfgAwakeCurrent.textContent = 'current: ' + state.config.awake;
+  if (document.activeElement !== ui.cfgId) ui.cfgId.value = state.config.id;
+  if (document.activeElement !== ui.cfgSleep) ui.cfgSleep.value = state.config.sleep;
+  if (document.activeElement !== ui.cfgAwake) ui.cfgAwake.value = state.config.awake;
+}
+
+function handleBat(kv) {
+  const v = parseFloat(kv.volts);
+  ui.battery.textContent = Number.isFinite(v) ? v.toFixed(3) + ' V' : '—';
+}
+
+function handleLogCount(kv) {
+  const n = parseInt(kv.count, 10);
+  ui.logCount.textContent = 'count: ' + (Number.isFinite(n) ? n : '?');
+}
+
+let dumpInProgress = false;
+function handleLogEntry(kv) {
+  if (!dumpInProgress) {
+    state.logEntries = [];
+    ui.logBody.innerHTML = '';
+    dumpInProgress = true;
+  }
+  const entry = {
+    idx: parseInt(kv.idx, 10),
+    type: parseInt(kv.type, 10),
+    attr: parseInt(kv.attr, 10),
+    time: parseInt(kv.time, 10),
+    value: parseInt(kv.value, 10),
+  };
+  state.logEntries.push(entry);
+  appendLogRow(entry);
+}
+
+function handleLogEnd() {
+  dumpInProgress = false;
+  ui.logEmpty.style.display = state.logEntries.length === 0 ? 'block' : 'none';
+  ui.downloadCsvBtn.disabled = state.logEntries.length === 0;
+}
+
+function appendLogRow(e) {
+  const tr = document.createElement('tr');
+  const typeName = EVENT_TYPE_NAMES[e.type] || ('TYPE_' + e.type);
+  const dateStr = e.time > 0 ? new Date(e.time * 1000).toISOString().replace('T', ' ').replace(/\..+$/, '') : '—';
+  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${e.attr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td>`;
+  ui.logBody.appendChild(tr);
+  ui.logEmpty.style.display = 'none';
+}
+
+function downloadCsv() {
+  const rows = [['idx', 'type_id', 'type_name', 'attr', 'unix', 'iso_utc', 'value']];
+  for (const e of state.logEntries) {
+    rows.push([
+      e.idx, e.type, EVENT_TYPE_NAMES[e.type] || '', e.attr, e.time,
+      e.time > 0 ? new Date(e.time * 1000).toISOString() : '', e.value,
+    ]);
+  }
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ars_event_log_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Wire up UI
+ui.connectBtn.addEventListener('click', connect);
+ui.disconnectBtn.addEventListener('click', disconnect);
+ui.readTimeBtn.addEventListener('click', () => send('--time'));
+ui.syncTimeBtn.addEventListener('click', () => {
+  const now = Math.floor(Date.now() / 1000);
+  send('--time -setUnix ' + now);
+});
+ui.readBatBtn.addEventListener('click', () => send('--bat'));
+ui.readConfigBtn.addEventListener('click', () => send('--config'));
+ui.setIdBtn.addEventListener('click', () => {
+  const v = parseInt(ui.cfgId.value, 10);
+  if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid ID');
+  send('--id -set ' + v);
+  setTimeout(() => send('--config'), 100);
+});
+ui.setSleepBtn.addEventListener('click', () => {
+  const v = parseInt(ui.cfgSleep.value, 10);
+  if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid sleep');
+  send('--sleep -set ' + v);
+  setTimeout(() => send('--config'), 100);
+});
+ui.setAwakeBtn.addEventListener('click', () => {
+  const v = parseInt(ui.cfgAwake.value, 10);
+  if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid awake');
+  send('--awake -set ' + v);
+  setTimeout(() => send('--config'), 100);
+});
+ui.readLogCountBtn.addEventListener('click', () => send('--log'));
+ui.dumpLogBtn.addEventListener('click', () => {
+  state.logEntries = [];
+  ui.logBody.innerHTML = '';
+  ui.logEmpty.style.display = 'block';
+  ui.downloadCsvBtn.disabled = true;
+  send('--log -dump');
+});
+ui.downloadCsvBtn.addEventListener('click', downloadCsv);
+ui.clearLogTableBtn.addEventListener('click', () => {
+  state.logEntries = [];
+  ui.logBody.innerHTML = '';
+  ui.logEmpty.style.display = 'block';
+  ui.downloadCsvBtn.disabled = true;
+});
+ui.consoleForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = ui.consoleInput.value;
+  if (!v) return;
+  send(v);
+  ui.consoleInput.value = '';
+});
+ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; });
+
+if (!navigator.serial) {
+  ui.unsupported.style.display = 'block';
+  ui.connectBtn.disabled = true;
+}
 </script>
 </body>
 </html>
