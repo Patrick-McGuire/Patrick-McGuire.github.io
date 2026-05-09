@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARS Console</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
+  #app { width: 100%; height: 100vh; border: 0; display: block; }
+  #status {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #b8c0c8; font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+    text-align: center; padding: 20px;
+  }
+  #status .title { color: #4ea1ff; font-size: 16px; margin-bottom: 6px; font-weight: 600; }
+  #status .err { color: #ff6b6b; margin-top: 6px; }
+  #status code { background: #1d212c; padding: 2px 6px; border-radius: 3px; word-break: break-all; }
+</style>
+</head>
+<body>
+<div id="status"><div><div class="title">ARS Console</div><div>Loading…</div></div></div>
+<iframe id="app" allow="serial" hidden></iframe>
+<script>
+'use strict';
+const SRC = 'https://raw.githubusercontent.com/Patrick-McGuire/acoustic_release_system/main/ars_platformio/tools/ars_console.html';
+const status = document.getElementById('status');
+const app = document.getElementById('app');
+
+fetch(SRC + '?cb=' + Date.now(), { cache: 'no-store' })
+  .then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+    return r.text();
+  })
+  .then(html => {
+    app.srcdoc = html;
+    app.hidden = false;
+    status.style.display = 'none';
+  })
+  .catch(e => {
+    status.innerHTML =
+      '<div><div class="title">ARS Console</div>' +
+      '<div class="err">Failed to load app.</div>' +
+      '<div style="margin-top:6px">' + e.message + '</div>' +
+      '<div style="margin-top:12px">Source: <code>' + SRC + '</code></div></div>';
+  });
+</script>
+</body>
+</html>
