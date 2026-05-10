@@ -488,8 +488,15 @@ function buildLogRow(e) {
 function downloadCsv() {
   const rows = [['idx', 'type_id', 'type_name', 'attr', 'unix', 'iso_utc', 'value']];
   for (const e of state.logEntries) {
+    const typeName = EVENT_TYPE_NAMES[e.type] || '';
+    let attrStr = String(e.attr);
+    if (typeName === 'DECODED') {
+      const errors = (e.attr >> 6) & 0x03;
+      const quality = e.attr & 0x3F;
+      attrStr = `${errors}|${quality}`;
+    }
     rows.push([
-      e.idx, e.type, EVENT_TYPE_NAMES[e.type] || '', e.attr, e.time,
+      e.idx, e.type, typeName, attrStr, e.time,
       e.time > 0 ? new Date(e.time * 1000).toISOString() : '', e.value,
     ]);
   }
