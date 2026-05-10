@@ -266,7 +266,11 @@ const state = {
   rxBuf: '', readLoop: null,
   config: null, deviceUnix: null, deviceUnixReadAt: null,
   logEntries: [],
+  shouldReconnect: false,
+  lastDeviceInfo: null,
+  reconnectTimer: null,
 };
+const RECONNECT_INTERVAL_MS = 1000;
 
 function log(text, cls) {
   const span = document.createElement('span');
@@ -291,6 +295,26 @@ function setConnected(connected) {
   ctrls.forEach(el => el.disabled = !connected);
 }
 
+async function openAndStart(port) {
+  await port.open({ baudRate: 115200 });
+  state.port = port;
+  state.writer = port.writable.getWriter();
+  state.reader = port.readable.getReader();
+  state.rxBuf = '';
+  state.lastDeviceInfo = port.getInfo();
+  state.shouldReconnect = true;
+  setConnected(true);
+  log('[connected]', 'tx');
+  state.readLoop = readLoop();
+  // Initial pull
+  setTimeout(() => {
+    send('--config');
+    send('--time');
+    send('--bat');
+    send('--log');
+  }, 100);
+}
+
 async function connect() {
   if (!navigator.serial) {
     ui.unsupported.style.display = 'block';
@@ -298,26 +322,18 @@ async function connect() {
   }
   try {
     const port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 115200 });
-    state.port = port;
-    state.writer = port.writable.getWriter();
-    state.reader = port.readable.getReader();
-    setConnected(true);
-    log('[connected]', 'tx');
-    state.readLoop = readLoop();
-    // Initial pull
-    setTimeout(() => {
-      send('--config');
-      send('--time');
-      send('--bat');
-      send('--log');
-    }, 100);
+    await openAndStart(port);
   } catch (e) {
     log('[connect failed: ' + e.message + ']', 'err');
   }
 }
 
 async function disconnect() {
+  state.shouldReconnect = false;
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
   try {
     if (state.reader) {
       try { await state.reader.cancel(); } catch (_) {}
@@ -327,7 +343,7 @@ async function disconnect() {
       try { state.writer.releaseLock(); } catch (_) {}
     }
     if (state.port) {
-      await state.port.close();
+      try { await state.port.close(); } catch (_) {}
     }
   } catch (e) {
     log('[disconnect error: ' + e.message + ']', 'err');
@@ -335,6 +351,48 @@ async function disconnect() {
     state.port = state.reader = state.writer = null;
     setConnected(false);
     log('[disconnected]', 'tx');
+  }
+}
+
+// Called when the connection is lost involuntarily (cable unplugged, device reset, etc.)
+function handleConnectionLost() {
+  if (!state.port && !state.reader && !state.writer) return;
+  log('[connection lost]', 'warn');
+  try { state.reader && state.reader.releaseLock(); } catch (_) {}
+  try { state.writer && state.writer.releaseLock(); } catch (_) {}
+  state.port = state.reader = state.writer = null;
+  state.rxBuf = '';
+  setConnected(false);
+  if (state.shouldReconnect) scheduleReconnect();
+}
+
+function scheduleReconnect() {
+  if (state.reconnectTimer || !state.shouldReconnect) return;
+  state.reconnectTimer = setTimeout(() => {
+    state.reconnectTimer = null;
+    tryReconnect();
+  }, RECONNECT_INTERVAL_MS);
+}
+
+async function tryReconnect() {
+  if (!state.shouldReconnect || state.port) return;
+  try {
+    const ports = await navigator.serial.getPorts();
+    const target = ports.find(p => {
+      const info = p.getInfo();
+      return state.lastDeviceInfo
+          && info.usbVendorId === state.lastDeviceInfo.usbVendorId
+          && info.usbProductId === state.lastDeviceInfo.usbProductId;
+    });
+    if (!target) {
+      scheduleReconnect();
+      return;
+    }
+    log('[reconnecting...]', 'tx');
+    await openAndStart(target);
+  } catch (_) {
+    // Device probably still enumerating; try again.
+    scheduleReconnect();
   }
 }
 
@@ -355,6 +413,10 @@ async function readLoop() {
     }
   } catch (e) {
     if (state.port) log('[read error: ' + e.message + ']', 'err');
+  } finally {
+    // The reader returned done or threw — almost always means the device went away.
+    // Don't fire if we're already cleaned up (user-initiated disconnect path).
+    if (state.shouldReconnect) handleConnectionLost();
   }
 }
 
@@ -593,6 +655,10 @@ ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; 
 if (!navigator.serial) {
   ui.unsupported.style.display = 'block';
   ui.connectBtn.disabled = true;
+} else {
+  navigator.serial.addEventListener('disconnect', (e) => {
+    if (e.target === state.port) handleConnectionLost();
+  });
 }
 </script>
 </body>
