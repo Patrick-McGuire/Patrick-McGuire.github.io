@@ -186,6 +186,16 @@
       <button id="setAwakeBtn" disabled>Save</button>
       <span class="badge" id="cfgAwakeCurrent"></span>
     </div>
+    <div class="row">
+      <label>State</label>
+      <select id="cfgState" disabled>
+        <option value="0">0 — UNRELEASED</option>
+        <option value="1">1 — RELEASING</option>
+        <option value="2">2 — RELEASED</option>
+      </select>
+      <button id="setStateBtn" disabled>Save</button>
+      <span class="badge" id="cfgStateCurrent"></span>
+    </div>
     <div class="toolbar">
       <button id="readConfigBtn" disabled>Refresh</button>
     </div>
@@ -235,11 +245,12 @@ const ui = {
   readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'),
   battery: $('battery'), readBatBtn: $('readBatBtn'),
   cfgVersion: $('cfgVersion'),
-  cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'),
+  cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'), cfgState: $('cfgState'),
   cfgIdCurrent: $('cfgIdCurrent'),
   cfgSleepCurrent: $('cfgSleepCurrent'),
   cfgAwakeCurrent: $('cfgAwakeCurrent'),
-  setIdBtn: $('setIdBtn'), setSleepBtn: $('setSleepBtn'), setAwakeBtn: $('setAwakeBtn'),
+  cfgStateCurrent: $('cfgStateCurrent'),
+  setIdBtn: $('setIdBtn'), setSleepBtn: $('setSleepBtn'), setAwakeBtn: $('setAwakeBtn'), setStateBtn: $('setStateBtn'),
   readConfigBtn: $('readConfigBtn'),
   logCount: $('logCount'), logBody: $('logBody'), logEmpty: $('logEmpty'),
   readLogCountBtn: $('readLogCountBtn'), dumpLogBtn: $('dumpLogBtn'),
@@ -272,8 +283,8 @@ function setConnected(connected) {
   ui.disconnectBtn.disabled = !connected;
   const ctrls = [
     ui.readTimeBtn, ui.syncTimeBtn, ui.readBatBtn, ui.readConfigBtn,
-    ui.setIdBtn, ui.setSleepBtn, ui.setAwakeBtn,
-    ui.cfgId, ui.cfgSleep, ui.cfgAwake,
+    ui.setIdBtn, ui.setSleepBtn, ui.setAwakeBtn, ui.setStateBtn,
+    ui.cfgId, ui.cfgSleep, ui.cfgAwake, ui.cfgState,
     ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn, ui.clearDeviceLogBtn,
     ui.consoleInput, ui.consoleSendBtn,
   ];
@@ -404,20 +415,25 @@ function handleTime(kv) {
   ui.timeDrift.textContent = (drift >= 0 ? '+' : '') + drift + ' s';
 }
 
+const STATE_NAMES = ['UNRELEASED', 'RELEASING', 'RELEASED'];
 function handleConfig(kv) {
   state.config = {
     version: parseInt(kv.version, 10),
     id: parseInt(kv.id, 10),
     sleep: parseInt(kv.sleep, 10),
     awake: parseInt(kv.awake, 10),
+    stateValue: parseInt(kv.state, 10),
   };
   ui.cfgVersion.textContent = state.config.version;
   ui.cfgIdCurrent.textContent = 'current: ' + state.config.id;
   ui.cfgSleepCurrent.textContent = 'current: ' + state.config.sleep;
   ui.cfgAwakeCurrent.textContent = 'current: ' + state.config.awake;
+  const stateName = STATE_NAMES[state.config.stateValue] || ('?' + state.config.stateValue);
+  ui.cfgStateCurrent.textContent = 'current: ' + state.config.stateValue + ' (' + stateName + ')';
   if (document.activeElement !== ui.cfgId) ui.cfgId.value = state.config.id;
   if (document.activeElement !== ui.cfgSleep) ui.cfgSleep.value = state.config.sleep;
   if (document.activeElement !== ui.cfgAwake) ui.cfgAwake.value = state.config.awake;
+  if (document.activeElement !== ui.cfgState) ui.cfgState.value = String(state.config.stateValue);
 }
 
 function handleBat(kv) {
@@ -536,6 +552,12 @@ ui.setAwakeBtn.addEventListener('click', () => {
   const v = parseInt(ui.cfgAwake.value, 10);
   if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid awake');
   send('--awake -set ' + v);
+  setTimeout(() => send('--config'), 100);
+});
+ui.setStateBtn.addEventListener('click', () => {
+  const v = parseInt(ui.cfgState.value, 10);
+  if (!Number.isFinite(v) || v < 0 || v > 2) return alert('Invalid state');
+  send('--state -set ' + v);
   setTimeout(() => send('--config'), 100);
 });
 ui.readLogCountBtn.addEventListener('click', () => send('--log'));
