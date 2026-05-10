@@ -198,6 +198,7 @@
       <button id="dumpLogBtn" disabled>Dump All</button>
       <button id="downloadCsvBtn" class="secondary" disabled>Download CSV</button>
       <button id="clearLogTableBtn" class="secondary" disabled>Clear Table</button>
+      <button id="clearDeviceLogBtn" class="danger" disabled>Clear Device Log</button>
     </div>
     <div class="log-table-wrap">
       <table>
@@ -243,6 +244,7 @@ const ui = {
   logCount: $('logCount'), logBody: $('logBody'), logEmpty: $('logEmpty'),
   readLogCountBtn: $('readLogCountBtn'), dumpLogBtn: $('dumpLogBtn'),
   downloadCsvBtn: $('downloadCsvBtn'), clearLogTableBtn: $('clearLogTableBtn'),
+  clearDeviceLogBtn: $('clearDeviceLogBtn'),
   console: $('console'), consoleInput: $('consoleInput'),
   consoleSendBtn: $('consoleSendBtn'), consoleClearBtn: $('consoleClearBtn'),
   consoleForm: $('consoleForm'), unsupported: $('unsupported'),
@@ -272,7 +274,7 @@ function setConnected(connected) {
     ui.readTimeBtn, ui.syncTimeBtn, ui.readBatBtn, ui.readConfigBtn,
     ui.setIdBtn, ui.setSleepBtn, ui.setAwakeBtn,
     ui.cfgId, ui.cfgSleep, ui.cfgAwake,
-    ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn,
+    ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn, ui.clearDeviceLogBtn,
     ui.consoleInput, ui.consoleSendBtn,
   ];
   ctrls.forEach(el => el.disabled = !connected);
@@ -357,11 +359,16 @@ async function send(cmd) {
 }
 
 function handleLine(line) {
-  // Echo back to console with appropriate styling
-  let cls = null;
-  if (line.startsWith('ERROR:')) cls = 'err';
-  else if (line.startsWith('WARN:')) cls = 'warn';
-  log(line, cls);
+  // High-volume LOGENTRY lines skip the console (already going to the table)
+  // to avoid DOM pressure during large dumps that can stall the read loop.
+  const isLogEntry = line.startsWith('MSG:\tLOGENTRY ');
+
+  if (!isLogEntry) {
+    let cls = null;
+    if (line.startsWith('ERROR:')) cls = 'err';
+    else if (line.startsWith('WARN:')) cls = 'warn';
+    log(line, cls);
+  }
 
   // Parse our structured MSG: lines.
   // Format: "MSG:\tTAG key=val key=val ..."
@@ -382,6 +389,7 @@ function handleLine(line) {
     case 'LOG': handleLogCount(kv); break;
     case 'LOGENTRY': handleLogEntry(kv); break;
     case 'LOGEND': handleLogEnd(); break;
+    case 'LOGCLEARED': handleLogCleared(); break;
   }
 }
 
@@ -426,33 +434,55 @@ let dumpInProgress = false;
 function handleLogEntry(kv) {
   if (!dumpInProgress) {
     state.logEntries = [];
-    ui.logBody.innerHTML = '';
     dumpInProgress = true;
   }
-  const entry = {
+  state.logEntries.push({
     idx: parseInt(kv.idx, 10),
     type: parseInt(kv.type, 10),
     attr: parseInt(kv.attr, 10),
     time: parseInt(kv.time, 10),
     value: parseInt(kv.value, 10),
-  };
-  state.logEntries.push(entry);
-  appendLogRow(entry);
+  });
+  // Defer DOM rendering until LOGEND to keep the read loop responsive.
 }
 
 function handleLogEnd() {
   dumpInProgress = false;
+  // Build all rows in one DocumentFragment, then a single insert.
+  // Newest at top: iterate entries in reverse.
+  const frag = document.createDocumentFragment();
+  for (let i = state.logEntries.length - 1; i >= 0; --i) {
+    frag.appendChild(buildLogRow(state.logEntries[i]));
+  }
+  ui.logBody.innerHTML = '';
+  ui.logBody.appendChild(frag);
   ui.logEmpty.style.display = state.logEntries.length === 0 ? 'block' : 'none';
   ui.downloadCsvBtn.disabled = state.logEntries.length === 0;
+  log('[dump complete: ' + state.logEntries.length + ' entries]', 'tx');
 }
 
-function appendLogRow(e) {
+function handleLogCleared() {
+  state.logEntries = [];
+  ui.logBody.innerHTML = '';
+  ui.logEmpty.style.display = 'block';
+  ui.downloadCsvBtn.disabled = true;
+  ui.logCount.textContent = 'count: 0';
+  log('[device log cleared]', 'tx');
+}
+
+function buildLogRow(e) {
   const tr = document.createElement('tr');
   const typeName = EVENT_TYPE_NAMES[e.type] || ('TYPE_' + e.type);
   const dateStr = e.time > 0 ? new Date(e.time * 1000).toISOString().replace('T', ' ').replace(/\..+$/, '') : '—';
-  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${e.attr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td>`;
-  ui.logBody.appendChild(tr);
-  ui.logEmpty.style.display = 'none';
+  let attrStr = String(e.attr);
+  if (typeName === 'DECODED') {
+    // attr packs (errors << 6) | (quality & 0x3F)
+    const errors = (e.attr >> 6) & 0x03;
+    const quality = e.attr & 0x3F;
+    attrStr = `${errors}|${quality}`;
+  }
+  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${attrStr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td>`;
+  return tr;
 }
 
 function downloadCsv() {
@@ -515,6 +545,12 @@ ui.clearLogTableBtn.addEventListener('click', () => {
   ui.logBody.innerHTML = '';
   ui.logEmpty.style.display = 'block';
   ui.downloadCsvBtn.disabled = true;
+});
+ui.clearDeviceLogBtn.addEventListener('click', () => {
+  if (!confirm('Erase all event log entries on the device? This cannot be undone.')) return;
+  send('--log -clear');
+  // Clearing the EEPROM takes ~1-2s on device; refresh count after a delay
+  setTimeout(() => send('--log'), 2500);
 });
 ui.consoleForm.addEventListener('submit', (e) => {
   e.preventDefault();
