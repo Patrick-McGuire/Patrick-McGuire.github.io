@@ -1,4 +1,9 @@
 <!doctype html>
+<!--
+  CLAUDE: After editing this file, remind the user to copy it to
+  C:\Users\patri\Documents\Software\Patrick-McGuire.github.io\ars\index.html
+  so the GitHub Pages mirror stays in sync. (Offer to do the copy yourself.)
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -66,7 +71,7 @@
   }
   .panel.full { grid-column: 1 / -1; }
   .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .row label { color: var(--muted); width: 80px; flex-shrink: 0; font-size: 12px; }
+  .row > label { color: var(--muted); width: 80px; flex-shrink: 0; font-size: 12px; }
   .row .value { font-family: var(--mono); flex: 1; }
   .row input[type="number"], .row input[type="text"] {
     background: var(--panel-2); border: 1px solid var(--border);
@@ -196,6 +201,15 @@
       <button id="setStateBtn" disabled>Save</button>
       <span class="badge" id="cfgStateCurrent"></span>
     </div>
+    <div class="row" style="align-items: flex-start;">
+      <label>Events</label>
+      <div id="cfgEvents" style="flex: 1; display: flex; flex-wrap: wrap; gap: 8px 16px;"></div>
+    </div>
+    <div class="row">
+      <label></label>
+      <button id="setEventsBtn" disabled>Save Events</button>
+      <span class="badge" id="cfgEventsCurrent"></span>
+    </div>
     <div class="toolbar">
       <button id="readConfigBtn" disabled>Refresh</button>
     </div>
@@ -236,6 +250,8 @@
 'use strict';
 
 const EVENT_TYPE_NAMES = ['NONE', 'DECODED', 'DECODING_FAILED', 'SLEEP_FAILED', 'BATTERY_STATUS', 'BUFFER_OVERFLOW', 'BOOT'];
+// Bit 0 (NONE) is filtered separately on device; only the real event types are user-toggleable.
+const EVENT_TOGGLE_BITS = [1, 2, 3, 4, 5, 6];
 
 const $ = (id) => document.getElementById(id);
 const ui = {
@@ -246,11 +262,13 @@ const ui = {
   battery: $('battery'), readBatBtn: $('readBatBtn'),
   cfgVersion: $('cfgVersion'),
   cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'), cfgState: $('cfgState'),
+  cfgEvents: $('cfgEvents'), cfgEventsCurrent: $('cfgEventsCurrent'),
   cfgIdCurrent: $('cfgIdCurrent'),
   cfgSleepCurrent: $('cfgSleepCurrent'),
   cfgAwakeCurrent: $('cfgAwakeCurrent'),
   cfgStateCurrent: $('cfgStateCurrent'),
   setIdBtn: $('setIdBtn'), setSleepBtn: $('setSleepBtn'), setAwakeBtn: $('setAwakeBtn'), setStateBtn: $('setStateBtn'),
+  setEventsBtn: $('setEventsBtn'),
   readConfigBtn: $('readConfigBtn'),
   logCount: $('logCount'), logBody: $('logBody'), logEmpty: $('logEmpty'),
   readLogCountBtn: $('readLogCountBtn'), dumpLogBtn: $('dumpLogBtn'),
@@ -287,12 +305,13 @@ function setConnected(connected) {
   ui.disconnectBtn.disabled = !connected;
   const ctrls = [
     ui.readTimeBtn, ui.syncTimeBtn, ui.readBatBtn, ui.readConfigBtn,
-    ui.setIdBtn, ui.setSleepBtn, ui.setAwakeBtn, ui.setStateBtn,
+    ui.setIdBtn, ui.setSleepBtn, ui.setAwakeBtn, ui.setStateBtn, ui.setEventsBtn,
     ui.cfgId, ui.cfgSleep, ui.cfgAwake, ui.cfgState,
     ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn, ui.clearDeviceLogBtn,
     ui.consoleInput, ui.consoleSendBtn,
   ];
   ctrls.forEach(el => el.disabled = !connected);
+  ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(el => el.disabled = !connected);
 }
 
 async function openAndStart(port) {
@@ -458,6 +477,7 @@ function handleLine(line) {
   switch (tag) {
     case 'TIME': handleTime(kv); break;
     case 'CONFIG': handleConfig(kv); break;
+    case 'EVENTS': handleEvents(kv); break;
     case 'BAT': handleBat(kv); break;
     case 'LOG': handleLogCount(kv); break;
     case 'LOGENTRY': handleLogEntry(kv); break;
@@ -485,6 +505,7 @@ function handleConfig(kv) {
     sleep: parseInt(kv.sleep, 10),
     awake: parseInt(kv.awake, 10),
     stateValue: parseInt(kv.state, 10),
+    events: parseInt(kv.events, 10),
   };
   ui.cfgVersion.textContent = state.config.version;
   ui.cfgIdCurrent.textContent = 'current: ' + state.config.id;
@@ -496,6 +517,54 @@ function handleConfig(kv) {
   if (document.activeElement !== ui.cfgSleep) ui.cfgSleep.value = state.config.sleep;
   if (document.activeElement !== ui.cfgAwake) ui.cfgAwake.value = state.config.awake;
   if (document.activeElement !== ui.cfgState) ui.cfgState.value = String(state.config.stateValue);
+  if (Number.isFinite(state.config.events)) applyEventsMask(state.config.events);
+}
+
+function handleEvents(kv) {
+  const mask = parseInt(kv.mask, 10);
+  if (Number.isFinite(mask)) {
+    if (state.config) state.config.events = mask;
+    applyEventsMask(mask);
+  }
+}
+
+function buildEventCheckboxes() {
+  const frag = document.createDocumentFragment();
+  for (const bit of EVENT_TOGGLE_BITS) {
+    const wrap = document.createElement('label');
+    wrap.style.cssText = 'display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 12px;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.bit = String(bit);
+    cb.disabled = true;
+    wrap.appendChild(cb);
+    const txt = document.createElement('span');
+    txt.textContent = EVENT_TYPE_NAMES[bit];
+    wrap.appendChild(txt);
+    frag.appendChild(wrap);
+  }
+  ui.cfgEvents.innerHTML = '';
+  ui.cfgEvents.appendChild(frag);
+}
+
+function applyEventsMask(mask) {
+  const u32 = (mask >>> 0);
+  ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    if (document.activeElement === cb) return;
+    const bit = parseInt(cb.dataset.bit, 10);
+    cb.checked = (u32 & (1 << bit)) !== 0;
+  });
+  ui.cfgEventsCurrent.textContent = 'current: 0x' + u32.toString(16).padStart(8, '0');
+}
+
+function readEventsMaskFromUi() {
+  let mask = state.config && Number.isFinite(state.config.events) ? (state.config.events >>> 0) : 0xFFFFFFFF;
+  ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    const bit = parseInt(cb.dataset.bit, 10);
+    if (cb.checked) mask |= (1 << bit);
+    else mask &= ~(1 << bit);
+  });
+  return mask >>> 0;
 }
 
 function handleBat(kv) {
@@ -622,6 +691,11 @@ ui.setStateBtn.addEventListener('click', () => {
   send('--state -set ' + v);
   setTimeout(() => send('--config'), 100);
 });
+ui.setEventsBtn.addEventListener('click', () => {
+  const mask = readEventsMaskFromUi();
+  send('--events -mask ' + mask);
+  setTimeout(() => send('--config'), 100);
+});
 ui.readLogCountBtn.addEventListener('click', () => send('--log'));
 ui.dumpLogBtn.addEventListener('click', () => {
   state.logEntries = [];
@@ -651,6 +725,8 @@ ui.consoleForm.addEventListener('submit', (e) => {
   ui.consoleInput.value = '';
 });
 ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; });
+
+buildEventCheckboxes();
 
 if (!navigator.serial) {
   ui.unsupported.style.display = 'block';
