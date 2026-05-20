@@ -1,0 +1,263 @@
+<!-- TOP BAR -->
+<div id="topbar">
+  <span class="logo">// SERIAL</span>
+  <select id="port-select" title="Serial Port">
+    <option value="">— Select Port —</option>
+  </select>
+  <button class="btn" id="port-refresh-btn" title="Scan for ports">⟳</button>
+  <select id="baud-select" title="Baud Rate">
+    <option>300</option><option>1200</option><option>2400</option>
+    <option>4800</option><option>9600</option><option>19200</option>
+    <option>38400</option><option>57600</option><option selected>115200</option>
+    <option>230400</option><option>460800</option><option>921600</option>
+    <option>1000000</option><option>2000000</option>
+  </select>
+  <select id="databits-select" title="Data Bits">
+    <option>7</option><option selected>8</option>
+  </select>
+  <select id="parity-select" title="Parity">
+    <option value="none" selected>None</option>
+    <option value="even">Even</option>
+    <option value="odd">Odd</option>
+  </select>
+  <select id="stopbits-select" title="Stop Bits">
+    <option selected>1</option><option>2</option>
+  </select>
+  <select id="flowcontrol-select" title="Flow Control">
+    <option value="none" selected>No Flow</option>
+    <option value="hardware">Hardware</option>
+  </select>
+  <div class="sep"></div>
+  <button class="btn primary" id="connect-btn">Connect</button>
+  <div class="sep"></div>
+  <span class="status-dot" id="status-dot"></span>
+  <span id="status-label">Disconnected</span>
+  <div class="sep"></div>
+  <button class="btn" id="logging-btn" title="Start/Stop logging">⏺ Logging</button>
+  <button class="btn" id="save-btn" title="Save current console view to file">↓ Save View</button>
+  <button class="btn" id="clear-btn" title="Clear console + hex view">⌫ Clear</button>
+</div>
+
+<!-- TABS -->
+<div id="tabs">
+  <div class="tab active" data-tab="console">Console</div>
+  <div class="tab" data-tab="terminal">Terminal</div>
+  <div class="tab" data-tab="hex">Hex View</div>
+  <div class="tab" data-tab="plot">Plotter</div>
+  <div class="tab" data-tab="logs">Logs</div>
+  <div class="tab" data-tab="settings">Settings</div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- CONSOLE TAB -->
+  <div class="tab-panel active" id="tab-console">
+    <div id="console-toolbar">
+      <label>Display:</label>
+      <select id="display-mode">
+        <option value="ascii">ASCII</option>
+        <option value="hex">Hex</option>
+        <option value="mixed">Mixed</option>
+        <option value="dec">Decimal</option>
+      </select>
+      <div class="toolbar-sep"></div>
+      <label><input type="checkbox" id="chk-timestamps" checked> Timestamps</label>
+      <label><input type="checkbox" id="chk-autoscroll" checked> Autoscroll</label>
+      <label><input type="checkbox" id="chk-wrap"> Wrap long</label>
+      <div class="toolbar-sep"></div>
+      <label>Filter:</label>
+      <input type="text" class="filter-input" id="filter-input" placeholder="regex or text…">
+      <button class="btn" id="filter-clear-btn" style="padding:2px 6px;height:22px;font-size:10px;">✕</button>
+      <div class="toolbar-sep"></div>
+      <button class="btn" id="scroll-lock-btn" title="Lock scroll to bottom">⤓ Lock</button>
+    </div>
+    <div id="log-container"></div>
+  </div>
+
+  <!-- TERMINAL TAB -->
+  <div class="tab-panel" id="tab-terminal">
+    <div id="terminal-toolbar">
+      <label><input type="checkbox" id="term-local-echo"> Local echo</label>
+      <label><input type="checkbox" id="term-crlf"> Send CRLF on Enter (vs CR only)</label>
+      <div class="toolbar-sep"></div>
+      <label>Backspace sends:</label>
+      <select id="term-backspace">
+        <option value="del" selected>DEL (0x7F)</option>
+        <option value="bs">BS (0x08)</option>
+      </select>
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-sm" id="term-clear-btn">Clear</button>
+      <button class="btn btn-sm" id="term-paste-btn" title="Paste clipboard contents to device">Paste</button>
+      <div class="toolbar-sep"></div>
+      <span style="font-size:11px;color:var(--text3);">Click terminal & type to send. Box below also works for raw/hex.</span>
+    </div>
+    <div id="terminal-host"></div>
+  </div>
+
+  <!-- HEX TAB -->
+  <div class="tab-panel" id="tab-hex">
+    <div id="hex-panel">
+      <div id="hex-toolbar">
+        <label>Width:</label>
+        <input type="number" id="hex-width" value="16" min="8" max="32">
+        <label>Group:</label>
+        <select id="hex-group">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="8">8</option>
+        </select>
+        <div class="toolbar-sep"></div>
+        <label><input type="checkbox" id="hex-show-ascii" checked> ASCII</label>
+        <label><input type="checkbox" id="hex-show-addr" checked> Addr</label>
+        <label><input type="checkbox" id="hex-color" checked> Color</label>
+        <div class="toolbar-sep"></div>
+        <label>Max rows:</label>
+        <input type="number" id="hex-maxrows" value="200" min="10" max="2000">
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-sm" id="hex-clear-btn">Clear</button>
+        <button class="btn btn-sm" id="hex-save-btn">Save Binary</button>
+      </div>
+      <div id="hex-container"></div>
+    </div>
+  </div>
+
+  <!-- PLOTTER TAB -->
+  <div class="tab-panel" id="tab-plot">
+    <div id="plot-panel">
+      <div id="plot-toolbar">
+        <label>Delimiter:</label>
+        <select id="plot-delim">
+          <option value="comma">, comma</option>
+          <option value="space">space</option>
+          <option value="tab">tab</option>
+          <option value="semicolon">; semi</option>
+          <option value="pipe">| pipe</option>
+          <option value="colon">: colon</option>
+        </select>
+        <label>Keys:</label>
+        <input type="text" id="plot-keys" placeholder="a,b,c or auto" title="Channel names, comma-sep, or leave empty for auto">
+        <label>Samples:</label>
+        <input type="number" id="plot-samples" value="200" min="20" max="2000">
+        <div class="toolbar-sep"></div>
+        <label><input type="checkbox" id="plot-autoscale" checked> Autoscale</label>
+        <label>Y-min: <input type="number" id="plot-ymin" value="0" style="width:60px"></label>
+        <label>Y-max: <input type="number" id="plot-ymax" value="100" style="width:60px"></label>
+        <div class="toolbar-sep"></div>
+        <label><input type="checkbox" id="plot-paused"> Pause</label>
+        <button class="btn btn-sm" id="plot-clear-btn">Clear</button>
+        <button class="btn btn-sm" id="plot-export-btn">Export CSV</button>
+      </div>
+      <div id="plot-area">
+        <canvas id="plot-canvas"></canvas>
+        <div id="plot-legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGS TAB -->
+  <div class="tab-panel" id="tab-logs">
+    <div id="logs-panel">
+      <div class="panel-header">
+        <h2>Log files (this session)</h2>
+        <span class="meta">Each start/stop creates a new file. Files are kept in memory only — download before closing the tab.</span>
+      </div>
+      <div id="log-files-list"></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="tab-panel" id="tab-settings">
+    <div id="settings-panel">
+      <div class="settings-group">
+        <h3>Display</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Log max lines</div><div class="setting-desc">Oldest lines removed when limit reached</div></div>
+          <div class="setting-control"><input class="settings-input" type="number" id="s-maxlines" value="5000" min="100" max="50000"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Timestamp format</div></div>
+          <div class="setting-control">
+            <select class="settings-input" id="s-ts-format">
+              <option value="hms">HH:MM:SS</option>
+              <option value="hmsms" selected>HH:MM:SS.mmm</option>
+              <option value="epoch">Unix epoch</option>
+              <option value="rel">Relative (s)</option>
+            </select>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Font size</div></div>
+          <div class="setting-control"><input class="settings-input" type="number" id="s-fontsize" value="12" min="9" max="24"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Highlight keywords</div><div class="setting-desc">Comma-separated, e.g. ERROR,WARN,OK</div></div>
+          <div class="setting-control"><input class="settings-input" type="text" id="s-highlights" value="ERROR,WARN,OK,FAIL"></div>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>Connection</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Auto-reconnect</div><div class="setting-desc">Reopen the port when the same USB device (VID:PID) is replugged, or after a transient drop</div></div>
+          <div class="setting-control"><div class="toggle" id="s-autoreconnect" data-on="false"></div></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Reconnect retry interval (ms)</div><div class="setting-desc">Delay before silently retrying an open after a drop</div></div>
+          <div class="setting-control"><input class="settings-input" type="number" id="s-reconnect-interval" value="2000" min="500"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Echo sent commands</div><div class="setting-desc">Show sent commands in console</div></div>
+          <div class="setting-control"><div class="toggle on" id="s-echo" data-on="true"></div></div>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>Logging</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Log file path prefix</div></div>
+          <div class="setting-control"><input class="settings-input" type="text" id="s-logprefix" value="serial_log"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="setting-label">Include metadata header</div><div class="setting-desc">Port info and timestamp at top of each log file</div></div>
+          <div class="setting-control"><div class="toggle on" id="s-log-header" data-on="true"></div></div>
+        </div>
+      </div>
+      <div class="settings-group">
+        <h3>About</h3>
+        <div class="setting-row">
+          <div><div class="setting-label">Web Serial API</div><div class="setting-desc">Requires Chrome/Edge 89+. No drivers needed.</div></div>
+          <div class="setting-control"><span id="api-support-badge" style="font-size:11px;padding:2px 8px;border-radius:3px;"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- UNIVERSAL SEND BAR (hidden on logs/settings tabs) -->
+<div id="send-bar">
+  <select id="send-mode-select" title="Send as">
+    <option value="ascii">ASCII</option>
+    <option value="hex">Hex</option>
+  </select>
+  <input type="text" id="send-input" placeholder="Type command… (↑↓ history, Enter to send)" disabled>
+  <select id="eol-select" title="End of line">
+    <option value="\n">LF</option>
+    <option value="\r\n" selected>CR+LF</option>
+    <option value="\r">CR</option>
+    <option value="">None</option>
+  </select>
+  <button id="send-btn" disabled>Send ↵</button>
+</div>
+
+<!-- STATS BAR -->
+<div id="stats-bar">
+  <span>RX: <span class="stat-val" id="stat-rx">0 B</span></span>
+  <span>TX: <span class="stat-val" id="stat-tx">0 B</span></span>
+  <span>Rate: <span class="stat-val" id="stat-rate">0 B/s</span></span>
+  <span>Lines: <span class="stat-val" id="stat-lines">0</span></span>
+  <span class="spacer"></span>
+  <span id="stat-logging" style="color:var(--text3)">Logging: OFF</span>
+  <span>|</span>
+  <span id="stat-port">No port</span>
+</div>
