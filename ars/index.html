@@ -168,6 +168,16 @@
   </section>
 
   <section class="panel full">
+    <h2>Transmit</h2>
+    <div class="row">
+      <label>Message</label>
+      <input id="txMessage" type="number" min="0" max="65535" placeholder="0 – 65535" disabled>
+      <button id="txSendBtn" disabled>Transmit</button>
+      <span class="badge" id="txStatus"></span>
+    </div>
+  </section>
+
+  <section class="panel full">
     <h2>Configuration</h2>
     <div class="row">
       <label>Version</label>
@@ -260,6 +270,7 @@ const ui = {
   deviceTime: $('deviceTime'), deviceUnix: $('deviceUnix'), timeDrift: $('timeDrift'),
   readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'),
   battery: $('battery'), readBatBtn: $('readBatBtn'),
+  txMessage: $('txMessage'), txSendBtn: $('txSendBtn'), txStatus: $('txStatus'),
   cfgVersion: $('cfgVersion'),
   cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'), cfgState: $('cfgState'),
   cfgEvents: $('cfgEvents'), cfgEventsCurrent: $('cfgEventsCurrent'),
@@ -309,6 +320,7 @@ function setConnected(connected) {
     ui.cfgId, ui.cfgSleep, ui.cfgAwake, ui.cfgState,
     ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn, ui.clearDeviceLogBtn,
     ui.consoleInput, ui.consoleSendBtn,
+    ui.txMessage, ui.txSendBtn,
   ];
   ctrls.forEach(el => el.disabled = !connected);
   ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(el => el.disabled = !connected);
@@ -483,7 +495,19 @@ function handleLine(line) {
     case 'LOGENTRY': handleLogEntry(kv); break;
     case 'LOGEND': handleLogEnd(); break;
     case 'LOGCLEARED': handleLogCleared(); break;
+    case 'TRANSMIT': handleTransmit(kv); break;
+    case 'TRANSMITDONE': handleTransmitDone(); break;
   }
+}
+
+function handleTransmit(kv) {
+  ui.txStatus.textContent = 'transmitting: ' + (kv.message ?? '?');
+  ui.txSendBtn.disabled = true;
+}
+
+function handleTransmitDone() {
+  ui.txStatus.textContent = 'done';
+  ui.txSendBtn.disabled = !state.writer;
 }
 
 function handleTime(kv) {
@@ -723,6 +747,11 @@ ui.consoleForm.addEventListener('submit', (e) => {
   if (!v) return;
   send(v);
   ui.consoleInput.value = '';
+});
+ui.txSendBtn.addEventListener('click', () => {
+  const v = parseInt(ui.txMessage.value, 10);
+  if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid message (0–65535)');
+  send('--transmit ' + v);
 });
 ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; });
 
