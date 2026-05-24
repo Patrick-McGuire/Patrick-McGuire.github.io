@@ -10,18 +10,18 @@
         :root {
             --bg-color: #0f172a; --card-bg: #1e293b; --text-main: #f8fafc;
             --accent: #38bdf8; --success: #22c55e; --danger: #ef4444;
-            --border: #334155; --sidebar-w: 350px;
+            --border: #334155; --sidebar-w: 240px;
         }
         body {
             font-family: 'Inter', sans-serif; background-color: var(--bg-color);
             color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden;
         }
         #sidebar {
-            width: var(--sidebar-w); background-color: var(--card-bg);
+            width: var(--sidebar-w); flex-shrink: 0; background-color: var(--card-bg);
             border-right: 1px solid var(--border); display: flex; flex-direction: column;
             padding: 20px; gap: 15px; box-sizing: border-box;
         }
-        #main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; gap: 10px; overflow-y: auto; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 12px 16px; gap: 6px; overflow-y: auto; }
 
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
         .header-right { display: flex; align-items: center; gap: 15px; }
@@ -85,7 +85,7 @@
 
         .sidebar-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
 
-        #series-modal {
+        #series-modal, #config-modal {
             display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); align-items: center; justify-content: center;
         }
@@ -108,14 +108,14 @@
         #plot-container, #live-plot-container { background-color: var(--card-bg); border-radius: 12px; flex-grow: 1; border: 1px solid var(--border); }
         #terminal { background: #000; color: #00ff41; font-family: 'Courier New', monospace; padding: 12px; font-size: 0.75rem; overflow-y: auto; border-radius: 8px; height: 140px; border: 1px solid var(--border); line-height: 1.4; }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-        .stat-card { background: var(--card-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border); text-align: center; display: flex; flex-direction: column; justify-content: center; }
-        .stat-val { font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+        .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+        .stat-card { background: var(--card-bg); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 38px; }
+        .stat-val { font-size: 0.95rem; font-weight: bold; color: var(--accent); line-height: 1.1; }
 
         .hover-dashboard {
-            background: #111827; border: 1px solid var(--border); border-radius: 8px;
-            padding: 10px; display: flex; flex-wrap: wrap; gap: 15px; min-height: 40px;
-            align-items: center; font-size: 0.85rem;
+            background: #111827; border: 1px solid var(--border); border-radius: 6px;
+            padding: 3px 8px; display: flex; flex-wrap: wrap; gap: 10px; min-height: 22px;
+            align-items: center; font-size: 0.75rem;
         }
         .hover-item { display: flex; gap: 5px; color: #94a3b8; }
         .hover-val { color: var(--accent); font-weight: bold; }
@@ -128,6 +128,14 @@
         <h3 style="margin-top:0">Graph Series Selection</h3>
         <div class="series-list" id="series-picker"></div>
         <button class="btn" onclick="closeSeriesModal()">Apply & Close</button>
+    </div>
+</div>
+
+<div id="config-modal">
+    <div class="modal-box">
+        <h3 style="margin-top:0">Flight Configuration</h3>
+        <div id="config-content" style="font-size:0.8rem; margin-bottom:15px;"></div>
+        <button class="btn" onclick="closeConfigModal()">Close</button>
     </div>
 </div>
 
@@ -169,8 +177,9 @@
             <div class="stat-card"><div id="stat-alt" class="stat-val">0</div><div style="font-size:0.6rem">MAX ALT (m)</div></div>
             <div class="stat-card"><div id="stat-vel" class="stat-val">0</div><div style="font-size:0.6rem">MAX VEL (m/s)</div></div>
             <div class="stat-card"><div id="stat-state" class="stat-val">-</div><div style="font-size:0.6rem">FINAL STATE</div></div>
-            <div class="stat-card"><button id="offloadBtn" class="btn btn-secondary" disabled style="height:100%; font-size:0.75rem">Offload Data</button></div>
-            <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size: 0.75rem;" onclick="openSeriesModal()">Select Series</button></div>
+            <div class="stat-card"><button id="offloadBtn" class="btn btn-secondary" disabled style="height:100%; font-size:0.7rem; padding:2px">Offload Data</button></div>
+            <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size:0.7rem; padding:2px" onclick="openSeriesModal()">Select Series</button></div>
+            <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size:0.7rem; padding:2px" onclick="openConfigModal()">View Config</button></div>
         </div>
         <div id="hover-dashboard" class="hover-dashboard">
             <div style="color: #64748b; font-style: italic;">Hover over the chart to see data...</div>
@@ -238,6 +247,7 @@
     let recording = false;
     let streaming = false;
     let currentFlightLines = [];
+    let currentConfigLine = "";
     let liveDataBuffer = [];
     let maxLivePoints = 200;
     let isLiveHovering = false;
@@ -260,6 +270,7 @@
         { id: "GROUND_TEMPERATURE", label: "Ground Temperature (kelvin)" },
         { id: "PYRO_FIRE_DURATION", label: "Pyro Duration (milliseconds)" },
         { id: "BOARD_NAME", label: "Board Name" },
+        { id: "BUZZER_ENABLED", label: "Buzzer Enabled", type: "checkbox" },
         { id: "CONFIGURATION_VERSION", label: "Config Version" }
     ];
 
@@ -336,17 +347,22 @@
                         const setMatch = line.match(/MSG:\s+([A-Z_]+)\s+is set to:\s+(.+)/);
                         if (setMatch) {
                             const inputEl = document.getElementById(`in-${setMatch[1]}`);
-                            if (inputEl) inputEl.value = setMatch[2].trim();
+                            if (inputEl) {
+                                const v = setMatch[2].trim();
+                                if (inputEl.type === 'checkbox') inputEl.checked = (v !== '0' && v.toLowerCase() !== 'false');
+                                else inputEl.value = v;
+                            }
                             setBusy(false);
                         }
 
-                        if (line.includes("Starting Offload")) { recording = true; currentFlightLines = []; setBusy(true); continue; }
+                        if (line.includes("Starting Offload")) { recording = true; currentFlightLines = []; currentConfigLine = ""; setBusy(true); continue; }
 
                         if (streaming && /^\d/.test(line)) handleLiveLine(line);
 
                         if (recording) {
-                            if (line.includes("Logger setup")) { if (currentFlightLines.length > 5) saveFlight(currentFlightLines); currentFlightLines = []; continue; }
-                            if (line.includes("Ending Offload")) { if (currentFlightLines.length > 5) saveFlight(currentFlightLines); recording = false; currentFlightLines = []; setBusy(false); continue; }
+                            if (line.includes("Logger setup")) { if (currentFlightLines.length > 5) saveFlight(currentFlightLines, currentConfigLine); currentFlightLines = []; currentConfigLine = ""; continue; }
+                            if (line.includes("Ending Offload")) { if (currentFlightLines.length > 5) saveFlight(currentFlightLines, currentConfigLine); recording = false; currentFlightLines = []; currentConfigLine = ""; setBusy(false); continue; }
+                            if (line.startsWith("CONFIG\t") || line.startsWith("CONFIG ")) { currentConfigLine = line; continue; }
                             if (/^\d/.test(line)) currentFlightLines.push(line);
                         }
                         if (line.includes("Erase Complete")) setBusy(false);
@@ -363,11 +379,23 @@
         const reader = new FileReader();
         reader.onload = function(e) {
             const contents = e.target.result;
-            const lines = contents.split('\n').map(line => line.trim()).filter(line => line);
+            const allLines = contents.split('\n').map(line => line.trim()).filter(line => line);
 
-            // If the file has a header (like the ones you export), skip the first line
-            if (lines[0].includes("timestampMs")) {
-                lines.shift();
+            // Optional first line: CONFIG row (saved by this tool when offloaded from device)
+            let loadedConfig = "";
+            if (allLines.length > 0 && (allLines[0].startsWith("CONFIG\t") || allLines[0].startsWith("CONFIG "))) {
+                loadedConfig = allLines.shift();
+            }
+
+            // Keep only data rows. Drops any non-data preamble (column header in either
+            // firmware or website format, "Logger setup" boot marker, stray MSG lines, etc.)
+            // so older raw serial captures load without modification.
+            const lines = allLines.filter(line => /^\d/.test(line));
+
+            if (lines.length === 0) {
+                logTerm(`Skipped ${file.name}: no data rows found`, "red");
+                document.getElementById('file-upload').value = '';
+                return;
             }
 
             // Create a new flight entry from the loaded data
@@ -375,7 +403,8 @@
             const newFlight = {
                 id: Date.now(),
                 name: file.name.replace('.txt', ''),
-                raw: lines
+                raw: lines,
+                config: loadedConfig
             };
 
             flightData.push(newFlight);
@@ -452,9 +481,9 @@
         if(!msg.includes("offload") && !msg.includes("erase") && !msg.includes("streamLog")) setTimeout(() => setBusy(false), 800);
     }
 
-    function saveFlight(lines) {
+    function saveFlight(lines, configLine = "") {
         const flightNum = flightData.length + 1;
-        const flight = { id: Date.now(), name: `Flight_${flightNum}`, raw: [...lines] };
+        const flight = { id: Date.now(), name: `Flight_${flightNum}`, raw: [...lines], config: configLine || "" };
         flightData.push(flight);
         refreshList();
         selectFlight(flightData.length - 1);
@@ -472,6 +501,35 @@
         });
         document.getElementById('clearAllBtn').disabled = (flightData.length === 0);
         document.getElementById('downloadZipBtn').disabled = (flightData.length === 0);
+    }
+
+    const FLIGHT_STATE_NAMES = {0:"PRE_FLIGHT", 1:"ASCENT", 2:"DESCENT", 3:"POST_FLIGHT", 4:"UNKNOWN_FLIGHT_STATE"};
+    const BOARD_ORIENTATION_NAMES = {0:"ERROR_AXIS_DIRECTION", 1:"POS_X", 2:"NEG_X", 3:"POS_Y", 4:"NEG_Y", 5:"POS_Z", 6:"NEG_Z"};
+    const CONFIG_VALUE_FORMATTERS = {
+        FLIGHT_STATE: v => `${FLIGHT_STATE_NAMES[parseInt(v)] || '?'} (${v})`,
+        BOARD_ORIENTATION: v => `${BOARD_ORIENTATION_NAMES[parseInt(v)] || '?'} (${v})`,
+    };
+
+    function openConfigModal() {
+        const contentEl = document.getElementById('config-content');
+        const f = (selectedIdx >= 0) ? flightData[selectedIdx] : null;
+        if (!f || !f.config) {
+            contentEl.innerHTML = '<div style="color:#94a3b8">No configuration available for this flight.</div>';
+        } else {
+            const body = f.config.replace(/^CONFIG[\s\t]+/, '');
+            const pairs = body.split(/[\t]+/).filter(p => p.length);
+            contentEl.innerHTML = pairs.map(p => {
+                const eq = p.indexOf('=');
+                if (eq < 0) return `<div style="padding:4px 0">${p}</div>`;
+                const k = p.slice(0, eq), v = p.slice(eq + 1);
+                const display = CONFIG_VALUE_FORMATTERS[k] ? CONFIG_VALUE_FORMATTERS[k](v) : v;
+                return `<div style="display:flex; justify-content:space-between; padding:4px 2px; border-bottom:1px solid #1e293b"><span style="color:#94a3b8">${k}</span><span style="color:var(--accent); font-family:'Courier New',monospace">${display}</span></div>`;
+            }).join('');
+        }
+        document.getElementById('config-modal').style.display = 'flex';
+    }
+    function closeConfigModal() {
+        document.getElementById('config-modal').style.display = 'none';
     }
 
     function selectFlight(i) {
@@ -579,11 +637,14 @@
         });
         const cfgContainer = document.getElementById('config-fields');
         configs.forEach(cfg => {
+            const inputHtml = cfg.type === 'checkbox'
+                ? `<input type="checkbox" id="in-${cfg.id}" style="width:20px; height:24px; flex-grow:0; align-self:center; margin-right:auto;">`
+                : `<input type="text" id="in-${cfg.id}" placeholder="...">`;
             cfgContainer.innerHTML += `
                 <div class="config-item">
                     <div class="config-label">${cfg.label}</div>
                     <div class="config-input-group">
-                        <input type="text" id="in-${cfg.id}" placeholder="...">
+                        ${inputHtml}
                         <button class="btn btn-secondary cfg-get" data-id="${cfg.id}" style="width:50px; padding:2px; height:24px; font-size:0.7rem">Get</button>
                         <button class="btn cfg-set" data-id="${cfg.id}" style="width:50px; padding:2px; height:24px; font-size:0.7rem">Set</button>
                     </div>
@@ -647,16 +708,24 @@
         document.getElementById('hist-val').innerText = this.value;
     };
 
+    function buildFlightText(f) {
+        const parts = [];
+        if (f.config) parts.push(f.config);
+        parts.push(HEADER.join("\t"));
+        parts.push(f.raw.join("\n"));
+        return parts.join("\n");
+    }
+
     document.getElementById('saveFileBtn').onclick = () => {
         const f = flightData[selectedIdx];
-        const blob = new Blob([HEADER.join("\t") + "\n" + f.raw.join("\n")], {type: 'text/plain'});
+        const blob = new Blob([buildFlightText(f)], {type: 'text/plain'});
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
         a.download = f.name + ".txt"; a.click();
     };
 
     document.getElementById('downloadZipBtn').onclick = async () => {
         const zip = new JSZip();
-        flightData.forEach(f => { zip.file(`${f.name}.txt`, HEADER.join("\t") + "\n" + f.raw.join("\n")); });
+        flightData.forEach(f => { zip.file(`${f.name}.txt`, buildFlightText(f)); });
         const content = await zip.generateAsync({type:"blob"});
         const a = document.createElement('a'); a.href = URL.createObjectURL(content);
         a.download = "SillyGoose_All_Flights.zip"; a.click();
@@ -677,7 +746,8 @@
         }
         if(e.target.classList.contains('cfg-set')) {
             const id = e.target.dataset.id;
-            const val = document.getElementById(`in-${id}`).value;
+            const el = document.getElementById(`in-${id}`);
+            const val = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
             sendCmd(`--${id} -set ${val}`);
         }
         if(e.target.classList.contains('ctrl-btn')) {
