@@ -237,7 +237,7 @@
     <div class="log-table-wrap">
       <table>
         <thead><tr>
-          <th>idx</th><th>type</th><th>attr</th><th>time (UTC)</th><th>unix</th><th>value</th>
+          <th>idx</th><th>type</th><th>attr</th><th>time (UTC)</th><th>unix</th><th>value</th><th>value (hex)</th><th>value (bin)</th>
         </tr></thead>
         <tbody id="logBody"></tbody>
       </table>
@@ -652,12 +652,15 @@ function buildLogRow(e) {
     const quality = e.attr & 0x3F;
     attrStr = `${errors}|${quality}`;
   }
-  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${attrStr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td>`;
+  const valU16 = e.value & 0xFFFF;
+  const valHex = '0x' + valU16.toString(16).toUpperCase().padStart(4, '0');
+  const valBin = valU16.toString(2).padStart(16, '0');
+  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${attrStr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td><td>${valHex}</td><td>${valBin}</td>`;
   return tr;
 }
 
 function downloadCsv() {
-  const rows = [['idx', 'type_id', 'type_name', 'attr', 'unix', 'iso_utc', 'value']];
+  const rows = [['idx', 'type_id', 'type_name', 'attr', 'unix', 'iso_utc', 'value', 'value_hex', 'value_bin']];
   for (const e of state.logEntries) {
     const typeName = EVENT_TYPE_NAMES[e.type] || '';
     let attrStr = String(e.attr);
@@ -666,9 +669,12 @@ function downloadCsv() {
       const quality = e.attr & 0x3F;
       attrStr = `${errors}|${quality}`;
     }
+    const valU16 = e.value & 0xFFFF;
+    const valHex = '0x' + valU16.toString(16).toUpperCase().padStart(4, '0');
+    const valBin = valU16.toString(2).padStart(16, '0');
     rows.push([
       e.idx, e.type, typeName, attrStr, e.time,
-      e.time > 0 ? new Date(e.time * 1000).toISOString() : '', e.value,
+      e.time > 0 ? new Date(e.time * 1000).toISOString() : '', e.value, valHex, valBin,
     ]);
   }
   const csv = rows.map(r => r.join(',')).join('\n');
