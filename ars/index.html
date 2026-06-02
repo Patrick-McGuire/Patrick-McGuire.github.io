@@ -260,6 +260,11 @@
 'use strict';
 
 const EVENT_TYPE_NAMES = ['NONE', 'DECODED', 'DECODING_FAILED', 'SLEEP_FAILED', 'BATTERY_STATUS', 'BUFFER_OVERFLOW', 'BOOT'];
+// Mirrors testMessages[] in include/ars.h — hex values shown green in the log.
+const TEST_MESSAGES = new Set([
+  0x1A3F, 0xB27D, 0x4C88, 0x73E1, 0x9D42,
+  0x0F3C, 0x56A9, 0xE204, 0x3B7F, 0x8C15,
+]);
 // Bit 0 (NONE) is filtered separately on device; only the real event types are user-toggleable.
 const EVENT_TOGGLE_BITS = [1, 2, 3, 4, 5, 6];
 
@@ -655,7 +660,8 @@ function buildLogRow(e) {
   const valU16 = e.value & 0xFFFF;
   const valHex = '0x' + valU16.toString(16).toUpperCase().padStart(4, '0');
   const valBin = valU16.toString(2).padStart(16, '0');
-  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${attrStr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td><td>${valHex}</td><td>${valBin}</td>`;
+  const hexStyle = TEST_MESSAGES.has(valU16) ? ' style="color: var(--good)"' : '';
+  tr.innerHTML = `<td>${e.idx}</td><td>${typeName}</td><td>${attrStr}</td><td>${dateStr}</td><td>${e.time}</td><td>${e.value}</td><td${hexStyle}>${valHex}</td><td>${valBin}</td>`;
   return tr;
 }
 
