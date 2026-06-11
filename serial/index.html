@@ -752,6 +752,10 @@ body {
 (function() {
 'use strict';
 
+const MAX_RAW_BYTES = 2 * 1024 * 1024;
+const MAX_RX_BUFFER_CHARS = 64 * 1024;
+const MAX_CONSOLE_LINE_CHARS = 8192;
+
 // ─── State ───────────────────────────────────────────────────────────────────
 const state = {
   port: null,
@@ -830,6 +834,18 @@ function formatDataForDisplay(bytes, mode) {
 
 function safeFilename(s) {
   return s.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+function appendRawBytes(bytes) {
+  for (const b of bytes) state.rawBytes.push(b);
+  const overflow = state.rawBytes.length - MAX_RAW_BYTES;
+  if (overflow > 0) state.rawBytes.splice(0, overflow);
+}
+
+function truncateConsoleLine(text) {
+  if (text.length <= MAX_CONSOLE_LINE_CHARS) return text;
+  const hidden = text.length - MAX_CONSOLE_LINE_CHARS;
+  return text.slice(0, MAX_CONSOLE_LINE_CHARS) + ` … [truncated ${hidden} chars]`;
 }
 
 // ─── Log System (console buffer) ─────────────────────────────────────────────
@@ -1159,7 +1175,12 @@ async function connect() {
 
 async function openPort(port) {
   const opts = currentPortOptions();
-  await port.open(opts);
+  try {
+    await port.open(opts);
+  } catch(e) {
+    try { await port.close(); } catch(closeErr) {}
+    throw e;
+  }
 
   state.port = port;
   state.connected = true;
@@ -1184,7 +1205,13 @@ async function readLoop() {
       while (true) {
         const { value, done } = await state.reader.read();
         if (done) break;
-        if (value) processIncomingBytes(value);
+        if (value) {
+          try {
+            processIncomingBytes(value);
+          } catch(e) {
+            appendLog(`Receive processing error: ${e.message}`, 'error');
+          }
+        }
       }
     } catch(e) {
       if (state.connected) {
@@ -1199,10 +1226,11 @@ async function readLoop() {
 }
 
 let rxBuffer = '';
+let lastRxBufferDropWarnAt = 0;
 
 function processIncomingBytes(bytes) {
   state.rxBytes += bytes.length;
-  state.rawBytes.push(...bytes);
+  appendRawBytes(bytes);
 
   // Hex view (always)
   appendHex(bytes, 'rx');
@@ -1217,6 +1245,16 @@ function processIncomingBytes(bytes) {
   const mode = document.getElementById('display-mode').value;
 
   rxBuffer += text;
+  if (rxBuffer.length > MAX_RX_BUFFER_CHARS) {
+    const dropped = rxBuffer.length - MAX_RX_BUFFER_CHARS;
+    rxBuffer = rxBuffer.slice(-MAX_RX_BUFFER_CHARS);
+    const now = Date.now();
+    if (now - lastRxBufferDropWarnAt > 1000) {
+      appendLog(`Dropped ${dropped} chars from an unterminated receive line. Check baud rate or line endings.`, 'warn');
+      lastRxBufferDropWarnAt = now;
+    }
+  }
+
   const lines = rxBuffer.split('\n');
   rxBuffer = lines.pop();
 
@@ -1229,9 +1267,10 @@ function processIncomingBytes(bytes) {
       const enc = new TextEncoder().encode(line);
       display = formatDataForDisplay(enc, mode);
     }
+    display = truncateConsoleLine(display);
     appendLog(display, 'rx');
 
-    if (!document.getElementById('plot-paused').checked) {
+    if (line.length <= MAX_CONSOLE_LINE_CHARS && !document.getElementById('plot-paused').checked) {
       parsePlotLine(line);
       schedulePlotDraw();
     }
