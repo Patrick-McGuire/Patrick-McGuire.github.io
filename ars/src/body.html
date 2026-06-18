@@ -1,0 +1,131 @@
+<header>
+  <h1>ARS Console</h1>
+  <span class="status-pill"><span id="dot" class="dot"></span><span id="status">Disconnected</span></span>
+  <button id="connectBtn">Connect</button>
+  <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+</header>
+
+<div id="unsupported" class="unsupported" style="display:none">
+  Web Serial API is not available in this browser. Use Chrome, Edge, or another Chromium-based browser.
+</div>
+
+<main>
+  <section class="panel">
+    <h2>Time</h2>
+    <div class="row">
+      <label>Device</label>
+      <span class="value" id="deviceTime">—</span>
+    </div>
+    <div class="row">
+      <label>Unix</label>
+      <span class="value" id="deviceUnix">—</span>
+    </div>
+    <div class="row">
+      <label>Drift</label>
+      <span class="value" id="timeDrift">—</span>
+    </div>
+    <div class="toolbar">
+      <button id="readTimeBtn" disabled>Read</button>
+      <button id="syncTimeBtn" disabled>Sync to Now</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Battery</h2>
+    <div class="row">
+      <label>Voltage</label>
+      <span class="value" id="battery">—</span>
+    </div>
+    <div class="toolbar">
+      <button id="readBatBtn" disabled>Read</button>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Transmit</h2>
+    <div class="row">
+      <label>Message</label>
+      <input id="txMessage" type="number" min="0" max="65535" placeholder="0 – 65535" disabled>
+      <button id="txSendBtn" disabled>Transmit</button>
+      <span class="badge" id="txStatus"></span>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Configuration</h2>
+    <div class="row">
+      <label>Version</label>
+      <span class="value" id="cfgVersion">—</span>
+    </div>
+    <div class="row">
+      <label>ID</label>
+      <input id="cfgId" type="number" min="0" max="65535" disabled>
+      <button id="setIdBtn" disabled>Save</button>
+      <span class="badge" id="cfgIdCurrent"></span>
+    </div>
+    <div class="row">
+      <label>Sleep (s)</label>
+      <input id="cfgSleep" type="number" min="0" max="65535" disabled>
+      <button id="setSleepBtn" disabled>Save</button>
+      <span class="badge" id="cfgSleepCurrent"></span>
+    </div>
+    <div class="row">
+      <label>Awake (s)</label>
+      <input id="cfgAwake" type="number" min="0" max="65535" disabled>
+      <button id="setAwakeBtn" disabled>Save</button>
+      <span class="badge" id="cfgAwakeCurrent"></span>
+    </div>
+    <div class="row">
+      <label>State</label>
+      <select id="cfgState" disabled>
+        <option value="0">0 — UNRELEASED</option>
+        <option value="1">1 — RELEASING</option>
+        <option value="2">2 — RELEASED</option>
+      </select>
+      <button id="setStateBtn" disabled>Save</button>
+      <span class="badge" id="cfgStateCurrent"></span>
+    </div>
+    <div class="row" style="align-items: flex-start;">
+      <label>Events</label>
+      <div id="cfgEvents" style="flex: 1; display: flex; flex-wrap: wrap; gap: 8px 16px;"></div>
+    </div>
+    <div class="row">
+      <label></label>
+      <button id="setEventsBtn" disabled>Save Events</button>
+      <span class="badge" id="cfgEventsCurrent"></span>
+    </div>
+    <div class="toolbar">
+      <button id="readConfigBtn" disabled>Refresh</button>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Event Log <span class="badge" id="logCount">count: 0</span></h2>
+    <div class="toolbar">
+      <button id="readLogCountBtn" disabled>Refresh Count</button>
+      <button id="dumpLogBtn" disabled>Dump All</button>
+      <button id="downloadCsvBtn" class="secondary" disabled>Download CSV</button>
+      <button id="clearLogTableBtn" class="secondary" disabled>Clear Table</button>
+      <button id="clearDeviceLogBtn" class="danger" disabled>Clear Device Log</button>
+    </div>
+    <div class="log-table-wrap">
+      <table>
+        <thead><tr>
+          <th>idx</th><th>type</th><th>attr</th><th>time (UTC)</th><th>unix</th><th>value</th><th>value (hex)</th><th>value (bin)</th>
+        </tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <div class="empty" id="logEmpty">No entries loaded. Click "Dump All" to fetch.</div>
+    </div>
+  </section>
+
+  <section class="panel full">
+    <h2>Console</h2>
+    <div class="console" id="console"></div>
+    <form class="console-input" id="consoleForm">
+      <input id="consoleInput" type="text" placeholder='e.g. --config, --time -setUnix 1715300000' autocomplete="off" disabled>
+      <button type="submit" id="consoleSendBtn" disabled>Send</button>
+      <button type="button" id="consoleClearBtn" class="secondary">Clear</button>
+    </form>
+  </section>
+</main>

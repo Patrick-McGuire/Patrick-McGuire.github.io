@@ -12,7 +12,7 @@ USB replug.
 ```
 serial/
 ├── index.html          # ASSEMBLED standalone output - do not edit by hand
-├── build.ps1           # PowerShell assembly script
+├── build.py            # Python assembly script
 ├── README.md           # this file
 ├── LICENSES.md         # MIT notices for bundled libraries
 └── src/
@@ -29,12 +29,12 @@ serial/
 
 1. Edit any file in `src/`.
 2. From this directory, run:
-   ```powershell
-   .\build.ps1
+   ```bash
+   python build.py
    ```
 3. Commit `index.html` along with the source change.
 
-The build is plain concatenation — no node/npm required.
+The build is plain concatenation; no node/npm required.
 `src/lib/` is shipped with a snapshot of xterm.js and is rarely touched.
 
 ## Note for Claude / future automated edits
@@ -42,7 +42,7 @@ The build is plain concatenation — no node/npm required.
 Don't open or rebuild `src/lib/xterm.min.js`. It's 280 KB of minified code
 that just exposes `window.Terminal` and `window.FitAddon`. Treat it as opaque.
 All app logic lives in `src/app.js`. After any source edit, run
-`.\build.ps1` from `serial/` to regenerate `index.html`.
+`python build.py` from `serial/` to regenerate `index.html`.
 
 ## Updating xterm.js
 
@@ -53,5 +53,5 @@ Invoke-WebRequest "https://cdn.jsdelivr.net/npm/xterm@<VERSION>/css/xterm.min.cs
 Invoke-WebRequest "https://cdn.jsdelivr.net/npm/xterm-addon-fit@<VERSION>/lib/xterm-addon-fit.min.js" -OutFile "$lib\xterm-addon-fit.min.js" -UseBasicParsing
 ```
 
-Then update version numbers in `build.ps1` (banners) and `LICENSES.md`,
-and re-run `.\build.ps1`.
+Then update version numbers in `build.py` (banners) and `LICENSES.md`,
+and re-run `python build.py`.
