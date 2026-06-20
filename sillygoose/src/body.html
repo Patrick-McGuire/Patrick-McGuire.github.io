@@ -24,6 +24,9 @@
     </div>
 
     <div style="font-size: 0.75rem; color: #94a3b8; margin-top:10px;">SESSION FLIGHTS</div>
+    <label style="display:flex; align-items:center; gap:6px; font-size:0.7rem; color:#94a3b8; margin:4px 0; cursor:pointer;">
+        <input type="checkbox" id="filter-flightstate"> Only logs with ASCENT/DESCENT
+    </label>
     <div id="flight-list"></div>
 
     <div class="sidebar-actions">
@@ -52,7 +55,10 @@
             <div class="stat-card"><div id="stat-alt" class="stat-val">0</div><div style="font-size:0.6rem">MAX ALT (m)</div></div>
             <div class="stat-card"><div id="stat-vel" class="stat-val">0</div><div style="font-size:0.6rem">MAX VEL (m/s)</div></div>
             <div class="stat-card"><div id="stat-state" class="stat-val">-</div><div style="font-size:0.6rem">FINAL STATE</div></div>
-            <div class="stat-card"><button id="offloadBtn" class="btn btn-secondary" disabled style="height:100%; font-size:0.7rem; padding:2px">Offload Data</button></div>
+            <div class="stat-card">
+                <button id="offloadBtn" class="btn btn-secondary" disabled style="height:45%; font-size:0.6rem; margin-bottom:2px; padding:2px">Offload (Text)</button>
+                <button id="offloadBinBtn" class="btn btn-secondary" disabled style="height:45%; font-size:0.6rem; padding:2px">Offload (Binary)</button>
+            </div>
             <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size:0.7rem; padding:2px" onclick="openSeriesModal()">Select Series</button></div>
             <div class="stat-card"><button class="btn btn-secondary" style="height:100%; font-size:0.7rem; padding:2px" onclick="openConfigModal()">View Config</button></div>
         </div>
