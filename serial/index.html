@@ -763,6 +763,8 @@ const state = {
   writer: null,
   connected: false,
   connecting: false,
+  reconfiguring: false,
+  pendingReconfigure: false,
   shouldReconnect: false,
   lastPortInfo: null,   // {usbVendorId, usbProductId} for replug match
   logLines: [],
@@ -814,6 +816,10 @@ function fmtTimestamp() {
 }
 
 function hexByte(b) { return b.toString(16).toUpperCase().padStart(2,'0'); }
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function formatDataForDisplay(bytes, mode) {
   if (mode === 'hex') return Array.from(bytes).map(hexByte).join(' ');
@@ -1099,6 +1105,13 @@ const statusDot = document.getElementById('status-dot');
 const statusLabel = document.getElementById('status-label');
 const sendInput = document.getElementById('send-input');
 const sendBtn = document.getElementById('send-btn');
+const serialOptionIds = [
+  'baud-select',
+  'databits-select',
+  'parity-select',
+  'stopbits-select',
+  'flowcontrol-select'
+];
 
 function setStatus(s) {
   statusDot.className = 'status-dot ' + s;
@@ -1126,6 +1139,12 @@ function portLabelFor(info, baud) {
     ? `USB ${info.usbVendorId.toString(16).padStart(4,'0')}:${info.usbProductId.toString(16).padStart(4,'0')}`
     : 'Serial Port';
   return `${lbl} @ ${baud}`;
+}
+
+function describePortOptions(opts) {
+  const parity = opts.parity === 'none' ? 'N' : opts.parity.charAt(0).toUpperCase();
+  const flow = opts.flowControl === 'hardware' ? ', hardware flow' : '';
+  return `${opts.baudRate} baud, ${opts.dataBits}${parity}${opts.stopBits}${flow}`;
 }
 
 async function connect() {
@@ -1197,13 +1216,37 @@ async function openPort(port) {
   readLoop();
 }
 
+let lastReadStreamErrorWarnAt = 0;
+
+function warnReadStreamError(error) {
+  const now = Date.now();
+  if (now - lastReadStreamErrorWarnAt < 2000) return;
+  const msg = error && error.message ? error.message : String(error || 'Unknown read error');
+  appendLog(`Serial read error: ${msg}. Retrying receive stream; check baud/parity/stop bits if this repeats.`, 'warn');
+  lastReadStreamErrorWarnAt = now;
+}
+
+async function waitForReadable(port) {
+  for (let i = 0; i < 20; i++) {
+    if (!state.connected || state.port !== port) return false;
+    if (port.readable) return true;
+    await delay(50);
+  }
+  return false;
+}
+
 async function readLoop() {
   const port = state.port;
-  while (port && port.readable && state.connected) {
-    state.reader = port.readable.getReader();
+  while (state.connected && state.port === port) {
+    if (!port.readable && !(await waitForReadable(port))) break;
+
+    let reader;
     try {
-      while (true) {
-        const { value, done } = await state.reader.read();
+      reader = port.readable.getReader();
+      state.reader = reader;
+
+      while (state.connected && state.port === port) {
+        const { value, done } = await reader.read();
         if (done) break;
         if (value) {
           try {
@@ -1214,14 +1257,23 @@ async function readLoop() {
         }
       }
     } catch(e) {
-      if (state.connected) {
-        appendLog(`Read error: ${e.message}`, 'error');
-        await handleDisconnect(false);
+      if (state.connected && state.port === port) {
+        // Wrong baud/parity commonly surfaces as a non-fatal stream error.
+        // Keep the port open and let the browser recreate port.readable.
+        warnReadStreamError(e);
+        await delay(25);
       }
     } finally {
-      try { state.reader.releaseLock(); } catch(e) {}
-      state.reader = null;
+      if (reader) {
+        try { reader.releaseLock(); } catch(e) {}
+        if (state.reader === reader) state.reader = null;
+      }
     }
+  }
+
+  if (state.connected && state.port === port && !state.reconfiguring) {
+    appendLog('Receive stream stopped; closing port.', 'warn');
+    await handleDisconnect(false);
   }
 }
 
@@ -1291,9 +1343,9 @@ async function handleDisconnect(userInitiated = false) {
   state.port = null;
   document.getElementById('stat-port').textContent = 'No port';
 
-  if (wasConnected) appendLog(userInitiated ? 'Disconnected.' : 'Port disconnected (device removed?)', 'info');
+  if (wasConnected && !state.reconfiguring) appendLog(userInitiated ? 'Disconnected.' : 'Port disconnected (device removed?)', 'info');
 
-  if (!userInitiated && state.shouldReconnect && state.settings.autoReconnect) {
+  if (!state.reconfiguring && !userInitiated && state.shouldReconnect && state.settings.autoReconnect) {
     setStatus('waiting');
     appendLog(`Auto-reconnect armed — will retry on replug or after ${state.settings.reconnectInterval}ms.`, 'info');
     setTimeout(tryAutoReconnect, state.settings.reconnectInterval);
@@ -1305,6 +1357,58 @@ async function handleDisconnect(userInitiated = false) {
 async function disconnect(userInitiated = true) {
   state.shouldReconnect = false;
   await handleDisconnect(userInitiated);
+}
+
+let reconfigureTimer = null;
+
+function queuePortReconfigure() {
+  if (state.reconfiguring) {
+    state.pendingReconfigure = true;
+    return;
+  }
+  if (!state.connected || !state.port) return;
+  if (reconfigureTimer) clearTimeout(reconfigureTimer);
+  reconfigureTimer = setTimeout(() => {
+    reconfigureTimer = null;
+    reconfigurePortOptions();
+  }, 100);
+}
+
+async function reconfigurePortOptions() {
+  if (state.reconfiguring) {
+    state.pendingReconfigure = true;
+    return;
+  }
+  if (!state.connected || !state.port) return;
+
+  const port = state.port;
+  state.reconfiguring = true;
+  state.connecting = true;
+  setStatus('connecting');
+
+  try {
+    const before = currentPortOptions();
+    appendLog(`Serial settings changed — reopening same port with ${describePortOptions(before)}…`, 'info');
+    await handleDisconnect(true);
+
+    const after = currentPortOptions();
+    await openPort(port);
+    appendLog(`Serial settings applied: ${describePortOptions(after)}`, 'info');
+  } catch(e) {
+    state.connected = false;
+    state.connecting = false;
+    state.shouldReconnect = false;
+    state.port = null;
+    document.getElementById('stat-port').textContent = 'No port';
+    setStatus('');
+    appendLog(`Failed to apply serial settings: ${e.message}`, 'error');
+  } finally {
+    state.reconfiguring = false;
+    if (state.pendingReconfigure) {
+      state.pendingReconfigure = false;
+      if (state.connected) queuePortReconfigure();
+    }
+  }
 }
 
 async function tryAutoReconnect() {
@@ -1747,6 +1851,9 @@ document.getElementById('save-btn').addEventListener('click', saveView);
 document.getElementById('clear-btn').addEventListener('click', clearLog);
 document.getElementById('logging-btn').addEventListener('click', toggleLogging);
 document.getElementById('port-refresh-btn').addEventListener('click', refreshPorts);
+serialOptionIds.forEach(id => {
+  document.getElementById(id).addEventListener('change', queuePortReconfigure);
+});
 
 sendBtn.addEventListener('click', send);
 sendInput.addEventListener('keydown', e => {
