@@ -9,22 +9,19 @@
 
   <span class="divider"></span>
 
-  <button id="draw-point-btn" class="btn" type="button" title="Drop standalone points">Point</button>
-  <button id="draw-path-btn" class="btn" type="button" title="Draw a multi-point path">Path</button>
-  <button id="draw-segment-btn" class="btn" type="button" title="Draw a two-point segment">Segment</button>
+  <button id="draw-point-btn" class="btn tool-btn" type="button" title="Drop standalone points">
+    <span class="tool-icon point-icon"></span><span>Point</span>
+  </button>
+  <button id="draw-segment-btn" class="btn tool-btn" type="button" title="Draw a two-point segment">
+    <span class="tool-icon segment-icon"></span><span>Segment</span>
+  </button>
+  <button id="draw-path-btn" class="btn tool-btn" type="button" title="Draw a multi-point path">
+    <span class="tool-icon path-icon"></span><span>Path</span>
+  </button>
   <button id="finish-path-btn" class="btn" type="button" disabled>Finish</button>
   <button id="undo-point-btn" class="btn" type="button" disabled>Undo</button>
   <button id="clear-active-btn" class="btn" type="button" disabled>Clear</button>
   <button id="clear-paths-btn" class="btn danger" type="button" disabled>Clear Paths</button>
-
-  <label class="compact-field" title="Path color">
-    <span>Color</span>
-    <input id="path-color" type="color" value="#1c7ed6">
-  </label>
-  <label class="compact-field" title="Path width">
-    <span>Width</span>
-    <input id="path-width" type="number" min="1" max="12" value="4">
-  </label>
   <label class="compact-field" title="Distance units">
     <span>Units</span>
     <select id="distance-units">
@@ -43,6 +40,50 @@
   <span id="draw-status" class="status-chip">Ready</span>
 </div>
 
+<div id="tool-options" class="tool-options" hidden>
+  <div class="tool-options-title" id="tool-options-title">Tool Options</div>
+  <div class="tool-option-row tool-point-only">
+    <label>
+      <span>Type</span>
+      <select id="tool-point-type">
+        <option value="circle">Circle</option>
+        <option value="pin">Pin</option>
+        <option value="square">Square</option>
+        <option value="triangle">Triangle</option>
+        <option value="diamond">Diamond</option>
+        <option value="cross">Cross</option>
+      </select>
+    </label>
+    <label>
+      <span>Size</span>
+      <input id="tool-point-size" type="number" min="4" max="48" value="14">
+    </label>
+    <label>
+      <span>Color</span>
+      <input id="tool-point-color" type="color" value="#ff6b35">
+    </label>
+  </div>
+  <div class="tool-option-row tool-line-only">
+    <label>
+      <span>Color</span>
+      <input id="path-color" type="color" value="#1c7ed6">
+    </label>
+    <label>
+      <span>Width</span>
+      <input id="path-width" type="number" min="1" max="12" value="4">
+    </label>
+  </div>
+</div>
+
+<div id="feature-menu" class="feature-menu" hidden>
+  <div class="feature-menu-title" id="feature-menu-title">Feature</div>
+  <div id="feature-menu-fields" class="feature-menu-fields"></div>
+  <div class="feature-menu-actions">
+    <button id="feature-menu-tree-btn" class="tree-btn" type="button">Tree</button>
+    <button id="feature-menu-delete-btn" class="tree-btn danger" type="button">Delete</button>
+  </div>
+</div>
+
 <aside id="side-panel" class="side-panel" aria-label="Bulk plotting panel">
   <div class="panel-head">
     <h1>Map Tools</h1>
@@ -52,6 +93,7 @@
   <div class="panel-tabs" role="tablist" aria-label="Side panel views">
     <button id="plot-tab-btn" class="panel-tab active" type="button" role="tab" aria-selected="true" aria-controls="plot-panel">Plot</button>
     <button id="elements-tab-btn" class="panel-tab" type="button" role="tab" aria-selected="false" aria-controls="elements-panel">Elements</button>
+    <button id="files-tab-btn" class="panel-tab" type="button" role="tab" aria-selected="false" aria-controls="files-panel">Files</button>
   </div>
 
   <div id="plot-panel" class="panel-scroll panel-tab-panel active" role="tabpanel" aria-labelledby="plot-tab-btn">
@@ -60,6 +102,13 @@
       <textarea id="point-input" spellcheck="false" placeholder="42.3601,-71.0589,circle,14&#10;42.3584,-71.0636,pin,18&#10;42.3550,-71.0550,square,12"></textarea>
 
       <div class="form-grid">
+        <label>
+          <span>Plot as</span>
+          <select id="plot-mode">
+            <option value="points">Points</option>
+            <option value="path">Connected path</option>
+          </select>
+        </label>
         <label>
           <span>Default type</span>
           <select id="default-type">
@@ -123,6 +172,19 @@
         <button id="clear-elements-btn" class="btn danger" type="button">Clear All</button>
       </div>
       <div id="element-tree" class="element-tree"></div>
+    </section>
+  </div>
+
+  <div id="files-panel" class="panel-scroll panel-tab-panel" role="tabpanel" aria-labelledby="files-tab-btn">
+    <section class="panel-section">
+      <label class="field-label" for="file-name-input">File name</label>
+      <input id="file-name-input" class="wide-input" type="text" value="map-file">
+      <div class="button-row compact-actions">
+        <button id="save-file-btn" class="btn primary" type="button">Save + Download</button>
+        <button id="open-computer-btn" class="btn" type="button">Open File</button>
+        <input id="open-file-input" type="file" accept="application/json,.json" hidden>
+      </div>
+      <div id="file-list" class="file-list"></div>
     </section>
   </div>
 </aside>

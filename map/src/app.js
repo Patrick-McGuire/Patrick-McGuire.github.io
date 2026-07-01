@@ -10,7 +10,19 @@ const ui = {
   elementsTabBtn: $('elements-tab-btn'),
   plotPanel: $('plot-panel'),
   elementsPanel: $('elements-panel'),
+  filesTabBtn: $('files-tab-btn'),
+  filesPanel: $('files-panel'),
   elementTree: $('element-tree'),
+  toolOptions: $('tool-options'),
+  toolOptionsTitle: $('tool-options-title'),
+  toolPointType: $('tool-point-type'),
+  toolPointSize: $('tool-point-size'),
+  toolPointColor: $('tool-point-color'),
+  featureMenu: $('feature-menu'),
+  featureMenuTitle: $('feature-menu-title'),
+  featureMenuFields: $('feature-menu-fields'),
+  featureMenuTreeBtn: $('feature-menu-tree-btn'),
+  featureMenuDeleteBtn: $('feature-menu-delete-btn'),
   basemapSelect: $('basemap-select'),
   locateBtn: $('locate-btn'),
   drawPointBtn: $('draw-point-btn'),
@@ -26,6 +38,7 @@ const ui = {
   showDistanceLabels: $('show-distance-labels'),
   drawStatus: $('draw-status'),
   pointInput: $('point-input'),
+  plotMode: $('plot-mode'),
   defaultType: $('default-type'),
   defaultSize: $('default-size'),
   defaultColor: $('default-color'),
@@ -37,6 +50,11 @@ const ui = {
   exportPointsBtn: $('export-points-btn'),
   fitElementsBtn: $('fit-elements-btn'),
   clearElementsBtn: $('clear-elements-btn'),
+  fileNameInput: $('file-name-input'),
+  saveFileBtn: $('save-file-btn'),
+  openComputerBtn: $('open-computer-btn'),
+  openFileInput: $('open-file-input'),
+  fileList: $('file-list'),
   pointCount: $('point-count'),
   pathCount: $('path-count'),
   errorBox: $('error-box'),
@@ -69,6 +87,7 @@ const STORAGE_KEYS = {
   view: 'mapPlotter.view',
   points: 'mapPlotter.points',
   paths: 'mapPlotter.paths',
+  files: 'mapPlotter.files',
   distanceUnits: 'mapPlotter.distanceUnits',
   showDistanceLabels: 'mapPlotter.showDistanceLabels',
 };
@@ -92,6 +111,10 @@ const state = {
   drawnPaths: [],
   activePath: null,
   drawMode: null,
+  panelTab: 'plot',
+  selected: null,
+  dragEdit: null,
+  files: [],
   toastTimer: null,
 };
 
@@ -101,10 +124,12 @@ function init() {
   initMap();
   wireUi();
   restorePreferences();
+  restoreFileLibrary();
   restoreSavedPoints();
   restoreSavedPaths();
   updateStats();
   updateDrawUi();
+  renderFileList();
 }
 
 function initMap() {
@@ -135,6 +160,7 @@ function initMap() {
   state.activeBase = state.baseLayers.satellite;
   L.control.zoom({ position: 'bottomright' }).addTo(state.map);
   state.map.on('click', handleMapClick);
+  state.map.on('contextmenu', hideFeatureMenu);
   state.map.on('moveend', saveMapView);
 }
 
@@ -143,6 +169,7 @@ function wireUi() {
   ui.panelClose.addEventListener('click', () => setPanelCollapsed(true));
   ui.plotTabBtn.addEventListener('click', () => setPanelTab('plot'));
   ui.elementsTabBtn.addEventListener('click', () => setPanelTab('elements'));
+  ui.filesTabBtn.addEventListener('click', () => setPanelTab('files'));
   ui.basemapSelect.addEventListener('change', changeBasemap);
   ui.locateBtn.addEventListener('click', locateUser);
 
@@ -158,6 +185,7 @@ function wireUi() {
   ui.distanceUnits.addEventListener('change', () => {
     localStorage.setItem(STORAGE_KEYS.distanceUnits, ui.distanceUnits.value);
     updatePathDistanceDisplays();
+    renderElementTree();
   });
   ui.showDistanceLabels.addEventListener('change', () => {
     localStorage.setItem(STORAGE_KEYS.showDistanceLabels, String(ui.showDistanceLabels.checked));
@@ -170,9 +198,20 @@ function wireUi() {
   ui.sampleBtn.addEventListener('click', loadSample);
   ui.exportPointsBtn.addEventListener('click', exportPoints);
   ui.fitElementsBtn.addEventListener('click', fitAllFeatures);
-  ui.clearElementsBtn.addEventListener('click', clearAllElements);
+  ui.clearElementsBtn.addEventListener('click', () => clearAllElements());
   ui.elementTree.addEventListener('click', handleElementTreeClick);
   ui.elementTree.addEventListener('change', handleElementTreeChange);
+  ui.saveFileBtn.addEventListener('click', saveCurrentFile);
+  ui.openComputerBtn.addEventListener('click', () => ui.openFileInput.click());
+  ui.openFileInput.addEventListener('change', openComputerFile);
+  ui.fileList.addEventListener('click', handleFileListClick);
+  ui.featureMenu.addEventListener('click', (event) => event.stopPropagation());
+  ui.featureMenu.addEventListener('change', handleFeatureMenuChange);
+  ui.featureMenuTreeBtn.addEventListener('click', () => jumpSelectionToTree());
+  ui.featureMenuDeleteBtn.addEventListener('click', deleteSelectedFeature);
+  document.addEventListener('click', (event) => {
+    if (!ui.featureMenu.hidden && !ui.featureMenu.contains(event.target)) hideFeatureMenu();
+  });
 }
 
 function restorePreferences() {
@@ -205,13 +244,20 @@ function togglePanel() {
 }
 
 function setPanelTab(tab) {
+  state.panelTab = tab;
   const showElements = tab === 'elements';
-  ui.plotTabBtn.classList.toggle('active', !showElements);
+  const showFiles = tab === 'files';
+  const showPlot = !showElements && !showFiles;
+  ui.plotTabBtn.classList.toggle('active', showPlot);
   ui.elementsTabBtn.classList.toggle('active', showElements);
-  ui.plotTabBtn.setAttribute('aria-selected', String(!showElements));
+  ui.filesTabBtn.classList.toggle('active', showFiles);
+  ui.plotTabBtn.setAttribute('aria-selected', String(showPlot));
   ui.elementsTabBtn.setAttribute('aria-selected', String(showElements));
-  ui.plotPanel.classList.toggle('active', !showElements);
+  ui.filesTabBtn.setAttribute('aria-selected', String(showFiles));
+  ui.plotPanel.classList.toggle('active', showPlot);
   ui.elementsPanel.classList.toggle('active', showElements);
+  ui.filesPanel.classList.toggle('active', showFiles);
+  if (showElements && state.selected) scrollSelectedTreeItem();
 }
 
 function changeBasemap() {
@@ -264,8 +310,23 @@ function plotPointsFromInput() {
     return;
   }
 
-  if (ui.replaceExisting.checked) clearPoints(false);
   showErrors(parsed.errors);
+  if (ui.replaceExisting.checked) clearAllElements(false, false);
+
+  if (ui.plotMode.value === 'path') {
+    if (parsed.points.length < 2) {
+      showToast('A connected path needs at least two points.');
+      return;
+    }
+    const latlngs = parsed.points.map((point) => L.latLng(point.lat, point.lon));
+    const path = addFinishedPath(latlngs, currentPathStyle());
+    updateStats();
+    savePaths();
+    fitLatLngs(latlngs);
+    showToast('Plotted connected path: ' + formatDistance(path.distanceMeters) + '.');
+    return;
+  }
+
   parsed.points.forEach(addPoint);
   updateStats();
   savePoints();
@@ -278,6 +339,14 @@ function currentPointDefaults() {
     type: normalizeMarkerType(ui.defaultType.value) || 'circle',
     size: clampNumber(Number(ui.defaultSize.value), 4, 48, 14),
     color: sanitizeColor(ui.defaultColor.value, '#ff6b35'),
+  };
+}
+
+function currentToolPointStyle() {
+  return {
+    type: normalizeMarkerType(ui.toolPointType.value) || 'circle',
+    size: clampNumber(Number(ui.toolPointSize.value), 4, 48, 14),
+    color: sanitizeColor(ui.toolPointColor.value, '#ff6b35'),
   };
 }
 
@@ -368,12 +437,40 @@ function addPoint(point) {
   const marker = L.marker([point.lat, point.lon], {
     icon: makeMarkerIcon(record.type, record.size, record.color),
     keyboard: false,
+    draggable: true,
   });
   record.marker = marker;
   updatePointTooltip(record);
+  wirePointMarker(record);
   marker.addTo(state.pointLayer);
   state.pointRecords.push(record);
   return record;
+}
+
+function wirePointMarker(point) {
+  point.marker.on('click', (event) => {
+    if (!canEditMapFeatures()) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'point', point }, true);
+  });
+  point.marker.on('contextmenu', (event) => {
+    if (!canEditMapFeatures()) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'point', point }, true);
+    showFeatureMenuForSelection(event.originalEvent);
+  });
+  point.marker.on('dragstart', () => {
+    if (!canEditMapFeatures()) point.marker.dragging.disable();
+    else hideFeatureMenu();
+  });
+  point.marker.on('dragend', () => {
+    const latlng = point.marker.getLatLng();
+    point.lat = latlng.lat;
+    point.lon = latlng.lng;
+    updatePointTooltip(point);
+    savePoints();
+    selectFeature({ kind: 'point', point }, false);
+  });
 }
 
 function updatePointMarker(point) {
@@ -407,6 +504,8 @@ function makeMarkerIcon(type, size, color) {
 function clearPoints(showMessage = true) {
   state.pointLayer.clearLayers();
   state.pointRecords = [];
+  if (state.selected && state.selected.kind === 'point') state.selected = null;
+  hideFeatureMenu();
   showErrors([]);
   updateStats();
   savePoints();
@@ -460,7 +559,7 @@ function handleMapClick(event) {
   if (!state.drawMode) return;
 
   if (state.drawMode === 'point') {
-    const defaults = currentPointDefaults();
+    const defaults = currentToolPointStyle();
     addPoint({
       lat: event.latlng.lat,
       lon: event.latlng.lng,
@@ -531,9 +630,116 @@ function addFinishedPath(points, style) {
     color: pathStyle.color,
     width: pathStyle.weight,
   };
+  wirePathFeature(path);
   state.drawnPaths.push(path);
   updatePathDistanceDisplay(path);
   return path;
+}
+
+function wirePathFeature(path) {
+  path.line.on('click', (event) => {
+    if (!canEditMapFeatures()) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'path', path }, true);
+  });
+  path.line.on('contextmenu', (event) => {
+    if (!canEditMapFeatures()) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'path', path }, true);
+    showFeatureMenuForSelection(event.originalEvent);
+  });
+  path.line.on('mousedown', (event) => {
+    if (!canEditMapFeatures() || isRightClick(event)) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'path', path }, true);
+    startPathDrag(path, event.latlng);
+  });
+  path.vertices.forEach((vertex, pointIndex) => wirePathVertex(path, vertex, pointIndex));
+}
+
+function wirePathVertex(path, vertex, pointIndex) {
+  vertex.on('click', (event) => {
+    if (!canEditMapFeatures()) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'path-point', path, pointIndex }, true);
+  });
+  vertex.on('contextmenu', (event) => {
+    if (!canEditMapFeatures()) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'path-point', path, pointIndex }, true);
+    showFeatureMenuForSelection(event.originalEvent);
+  });
+  vertex.on('mousedown', (event) => {
+    if (!canEditMapFeatures() || isRightClick(event)) return;
+    stopLeafletEvent(event);
+    selectFeature({ kind: 'path-point', path, pointIndex }, true);
+    startPathPointDrag(path, pointIndex);
+  });
+}
+
+function startPathDrag(path, startLatLng) {
+  hideFeatureMenu();
+  state.dragEdit = {
+    kind: 'path',
+    path,
+    startLatLng,
+    originalPoints: path.points.map((point) => L.latLng(point.lat, point.lng)),
+  };
+  state.map.dragging.disable();
+  state.map.getContainer().classList.add('is-editing');
+  state.map.on('mousemove', handlePathDragMove);
+  state.map.once('mouseup', finishPathDrag);
+}
+
+function handlePathDragMove(event) {
+  const drag = state.dragEdit;
+  if (!drag || drag.kind !== 'path') return;
+  const deltaLat = event.latlng.lat - drag.startLatLng.lat;
+  const deltaLng = event.latlng.lng - drag.startLatLng.lng;
+  drag.path.points = drag.originalPoints.map((point) => L.latLng(point.lat + deltaLat, point.lng + deltaLng));
+  updatePathGeometry(drag.path);
+}
+
+function finishPathDrag() {
+  state.map.off('mousemove', handlePathDragMove);
+  state.map.dragging.enable();
+  state.map.getContainer().classList.remove('is-editing');
+  if (state.dragEdit && state.dragEdit.kind === 'path') {
+    savePaths();
+    selectFeature({ kind: 'path', path: state.dragEdit.path }, false);
+  }
+  state.dragEdit = null;
+}
+
+function startPathPointDrag(path, pointIndex) {
+  hideFeatureMenu();
+  state.dragEdit = { kind: 'path-point', path, pointIndex };
+  state.map.dragging.disable();
+  state.map.getContainer().classList.add('is-editing');
+  state.map.on('mousemove', handlePathPointDragMove);
+  state.map.once('mouseup', finishPathPointDrag);
+}
+
+function handlePathPointDragMove(event) {
+  const drag = state.dragEdit;
+  if (!drag || drag.kind !== 'path-point' || !drag.path.points[drag.pointIndex]) return;
+  drag.path.points[drag.pointIndex] = event.latlng;
+  updatePathGeometry(drag.path);
+}
+
+function finishPathPointDrag() {
+  state.map.off('mousemove', handlePathPointDragMove);
+  state.map.dragging.enable();
+  state.map.getContainer().classList.remove('is-editing');
+  if (state.dragEdit && state.dragEdit.kind === 'path-point') {
+    savePaths();
+    selectFeature({
+      kind: 'path-point',
+      path: state.dragEdit.path,
+      pointIndex: state.dragEdit.pointIndex,
+    }, false);
+  }
+  state.dragEdit = null;
 }
 
 function undoActivePoint() {
@@ -562,21 +768,23 @@ function clearAllPaths(showMessage = true) {
   clearActivePath(false);
   state.pathLayer.clearLayers();
   state.drawnPaths = [];
+  if (state.selected && (state.selected.kind === 'path' || state.selected.kind === 'path-point')) state.selected = null;
+  hideFeatureMenu();
   updateStats();
   savePaths();
   updateDrawUi();
   if (showMessage) showToast('Cleared paths.');
 }
 
-function clearAllElements() {
+function clearAllElements(confirmFirst = true, showMessage = true) {
   if (state.pointRecords.length === 0 && state.drawnPaths.length === 0 && !state.activePath) {
-    showToast('Nothing to clear.');
+    if (showMessage) showToast('Nothing to clear.');
     return;
   }
-  if (!confirm('Clear all points and paths?')) return;
+  if (confirmFirst && !confirm('Clear all points and paths?')) return;
   clearPoints(false);
   clearAllPaths(false);
-  showToast('Cleared all elements.');
+  if (showMessage) showToast('Cleared all elements.');
 }
 
 function refreshActivePathStyle() {
@@ -618,6 +826,9 @@ function vertexStyle(color) {
 
 function updateDrawUi() {
   const activePoints = state.activePath ? state.activePath.points.length : 0;
+  hideFeatureMenu();
+  updateEditableInteractions();
+  updateToolOptionsUi();
   ui.drawPointBtn.classList.toggle('active', state.drawMode === 'point');
   ui.drawPathBtn.classList.toggle('active', state.drawMode === 'path');
   ui.drawSegmentBtn.classList.toggle('active', state.drawMode === 'segment');
@@ -636,6 +847,164 @@ function updateDrawUi() {
   } else {
     ui.drawStatus.textContent = 'Ready';
   }
+}
+
+function updateEditableInteractions() {
+  const editable = canEditMapFeatures();
+  state.pointRecords.forEach((point) => {
+    if (point.marker.dragging) {
+      if (editable) point.marker.dragging.enable();
+      else point.marker.dragging.disable();
+    }
+  });
+}
+
+function canEditMapFeatures() {
+  return !state.drawMode && !state.dragEdit;
+}
+
+function selectFeature(selection, scrollTree) {
+  state.selected = selection;
+  renderElementTree();
+  highlightSelectedFeature();
+  if (scrollTree && state.panelTab === 'elements') scrollSelectedTreeItem();
+}
+
+function highlightSelectedFeature() {
+  state.drawnPaths.forEach((path) => {
+    path.line.setStyle({
+      color: path.color,
+      weight: path.width + (isSelectedPath(path) ? 2 : 0),
+      opacity: isSelectedPath(path) ? 1 : 0.95,
+    });
+  });
+}
+
+function isSelectedPath(path) {
+  return state.selected
+    && (state.selected.kind === 'path' || state.selected.kind === 'path-point')
+    && state.selected.path === path;
+}
+
+function selectedTreeKey() {
+  if (!state.selected) return null;
+  if (state.selected.kind === 'point') {
+    const index = state.pointRecords.indexOf(state.selected.point);
+    return index >= 0 ? 'point-' + index : null;
+  }
+  if (state.selected.kind === 'path') {
+    const index = state.drawnPaths.indexOf(state.selected.path);
+    return index >= 0 ? 'path-' + index : null;
+  }
+  if (state.selected.kind === 'path-point') {
+    const index = state.drawnPaths.indexOf(state.selected.path);
+    return index >= 0 ? 'path-' + index + '-point-' + state.selected.pointIndex : null;
+  }
+  return null;
+}
+
+function scrollSelectedTreeItem() {
+  const key = selectedTreeKey();
+  if (!key) return;
+  requestAnimationFrame(() => {
+    const node = ui.elementTree.querySelector('[data-tree-key="' + key + '"]');
+    if (node) node.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function showFeatureMenuForSelection(originalEvent) {
+  if (!state.selected) return;
+  renderFeatureMenuFields();
+  const left = Math.min(originalEvent.clientX, window.innerWidth - 220);
+  const top = Math.min(originalEvent.clientY, window.innerHeight - 170);
+  ui.featureMenu.style.left = Math.max(8, left) + 'px';
+  ui.featureMenu.style.top = Math.max(8, top) + 'px';
+  ui.featureMenu.hidden = false;
+}
+
+function renderFeatureMenuFields() {
+  const selected = state.selected;
+  if (!selected) return;
+
+  if (selected.kind === 'point') {
+    ui.featureMenuTitle.textContent = 'Point';
+    ui.featureMenuFields.innerHTML =
+      '<label><span>Type</span><select data-menu-field="type">' + markerTypeOptions(selected.point.type) + '</select></label>' +
+      '<label><span>Size</span><input type="number" min="4" max="48" data-menu-field="size" value="' + selected.point.size + '"></label>' +
+      '<label><span>Color</span><input type="color" data-menu-field="color" value="' + selected.point.color + '"></label>';
+    return;
+  }
+
+  if (selected.kind === 'path' || selected.kind === 'path-point') {
+    const path = selected.path;
+    ui.featureMenuTitle.textContent = selected.kind === 'path-point' ? 'Path Point' : (path.points.length === 2 ? 'Segment' : 'Path');
+    ui.featureMenuFields.innerHTML =
+      '<label><span>Color</span><input type="color" data-menu-field="color" value="' + path.color + '"></label>' +
+      '<label><span>Width</span><input type="number" min="1" max="12" data-menu-field="width" value="' + path.width + '"></label>';
+  }
+}
+
+function handleFeatureMenuChange(event) {
+  const field = event.target.dataset.menuField;
+  if (!field || !state.selected) return;
+
+  if (state.selected.kind === 'point') {
+    const index = state.pointRecords.indexOf(state.selected.point);
+    if (index >= 0) updatePointField(index, field, event.target.value);
+  } else if (state.selected.kind === 'path' || state.selected.kind === 'path-point') {
+    const index = state.drawnPaths.indexOf(state.selected.path);
+    if (index >= 0) updatePathField(index, field, event.target.value);
+  }
+  renderElementTree();
+  renderFeatureMenuFields();
+}
+
+function jumpSelectionToTree() {
+  if (!state.selected) return;
+  setPanelTab('elements');
+  renderElementTree();
+  scrollSelectedTreeItem();
+}
+
+function deleteSelectedFeature() {
+  if (!state.selected) return;
+  if (state.selected.kind === 'point') {
+    const index = state.pointRecords.indexOf(state.selected.point);
+    if (index >= 0) deletePoint(index);
+  } else if (state.selected.kind === 'path') {
+    const index = state.drawnPaths.indexOf(state.selected.path);
+    if (index >= 0) deletePath(index);
+  } else if (state.selected.kind === 'path-point') {
+    const pathIndex = state.drawnPaths.indexOf(state.selected.path);
+    if (pathIndex >= 0) {
+      if (state.selected.path.points.length <= 2) deletePath(pathIndex);
+      else deletePathPoint(pathIndex, state.selected.pointIndex);
+    }
+  }
+  hideFeatureMenu();
+}
+
+function hideFeatureMenu() {
+  if (ui.featureMenu) ui.featureMenu.hidden = true;
+}
+
+function stopLeafletEvent(event) {
+  if (event && event.originalEvent) L.DomEvent.stop(event.originalEvent);
+}
+
+function isRightClick(event) {
+  return event && event.originalEvent && event.originalEvent.button === 2;
+}
+
+function updateToolOptionsUi() {
+  const hasTool = state.drawMode === 'point' || state.drawMode === 'path' || state.drawMode === 'segment';
+  ui.toolOptions.hidden = !hasTool;
+  ui.toolOptions.classList.toggle('point-mode', state.drawMode === 'point');
+  ui.toolOptions.classList.toggle('line-mode', state.drawMode === 'path' || state.drawMode === 'segment');
+  if (state.drawMode === 'point') ui.toolOptionsTitle.textContent = 'Point Style';
+  else if (state.drawMode === 'segment') ui.toolOptionsTitle.textContent = 'Segment Style';
+  else if (state.drawMode === 'path') ui.toolOptionsTitle.textContent = 'Path Style';
+  else ui.toolOptionsTitle.textContent = 'Tool Options';
 }
 
 function updatePathDistanceDisplays() {
@@ -682,6 +1051,13 @@ function updateSegmentDistanceLabels(path) {
 }
 
 function updateTotalDistanceLabel(path, text) {
+  if (path.points.length <= 2) {
+    if (path.totalLabelMarker) {
+      state.pathLayer.removeLayer(path.totalLabelMarker);
+      path.totalLabelMarker = null;
+    }
+    return;
+  }
   const labelLatLng = totalLabelLatLng(path.points);
   if (!labelLatLng) return;
   const icon = makeDistanceLabelIcon('Total: ' + text, 'total');
@@ -722,61 +1098,81 @@ function makeDistanceLabelIcon(text, type) {
 }
 
 function renderElementTree() {
-  ui.elementTree.innerHTML = [
-    renderPointGroup(),
-    renderPathGroup(),
-  ].join('');
+  const selectedKey = selectedTreeKey();
+  const rows = [];
+  state.pointRecords.forEach((point, index) => rows.push(renderPointFeature(point, index, selectedKey)));
+  state.drawnPaths.forEach((path, index) => rows.push(renderPathFeature(path, index, selectedKey)));
+  ui.elementTree.innerHTML = rows.length
+    ? '<div class="tree-items">' + rows.join('') + '</div>'
+    : '<div class="tree-empty">No plotted elements.</div>';
 }
 
-function renderPointGroup() {
-  if (state.pointRecords.length === 0) {
-    return '<details class="tree-group" open><summary>Points (0)</summary><div class="tree-empty">No points plotted.</div></details>';
-  }
-
-  const items = state.pointRecords.map((point, index) => {
-    const lat = point.lat.toFixed(6);
-    const lon = point.lon.toFixed(6);
-    return '<div class="tree-item">' +
-      '<div class="tree-item-head">' +
-      '<div><div class="tree-title">Point ' + (index + 1) + '</div><div class="tree-meta">' + lat + ', ' + lon + '</div></div>' +
-      '<button class="tree-btn" type="button" data-action="focus-point" data-index="' + index + '">Go</button>' +
-      '<button class="tree-btn danger" type="button" data-action="delete-point" data-index="' + index + '">Del</button>' +
-      '</div>' +
-      '<div class="tree-grid">' +
-      '<label><span>Lat</span><input type="number" step="0.000001" data-kind="point" data-field="lat" data-index="' + index + '" value="' + point.lat + '"></label>' +
-      '<label><span>Lon</span><input type="number" step="0.000001" data-kind="point" data-field="lon" data-index="' + index + '" value="' + point.lon + '"></label>' +
-      '<label><span>Type</span><select data-kind="point" data-field="type" data-index="' + index + '">' + markerTypeOptions(point.type) + '</select></label>' +
-      '<label><span>Size</span><input type="number" min="4" max="48" data-kind="point" data-field="size" data-index="' + index + '" value="' + point.size + '"></label>' +
-      '<label><span>Color</span><input type="color" data-kind="point" data-field="color" data-index="' + index + '" value="' + point.color + '"></label>' +
-      '</div>' +
-      '</div>';
-  }).join('');
-
-  return '<details class="tree-group" open><summary>Points (' + state.pointRecords.length + ')</summary><div class="tree-items">' + items + '</div></details>';
+function renderPointFeature(point, index, selectedKey) {
+  const key = 'point-' + index;
+  const selected = selectedKey === key;
+  const lat = point.lat.toFixed(6);
+  const lon = point.lon.toFixed(6);
+  return '<details class="tree-item' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
+    '<summary>' +
+    '<span class="tree-toggle"></span>' +
+    '<span><span class="tree-title">Point ' + (index + 1) + '</span><span class="tree-meta">' + lat + ', ' + lon + '</span></span>' +
+    '<button class="tree-btn" type="button" data-action="focus-point" data-index="' + index + '">Go</button>' +
+    '<button class="tree-btn danger" type="button" data-action="delete-point" data-index="' + index + '">Del</button>' +
+    '</summary>' +
+    '<div class="tree-body">' +
+    '<div class="tree-grid">' +
+    '<label><span>Lat</span><input type="number" step="0.000001" data-kind="point" data-field="lat" data-index="' + index + '" value="' + point.lat + '"></label>' +
+    '<label><span>Lon</span><input type="number" step="0.000001" data-kind="point" data-field="lon" data-index="' + index + '" value="' + point.lon + '"></label>' +
+    '<label><span>Type</span><select data-kind="point" data-field="type" data-index="' + index + '">' + markerTypeOptions(point.type) + '</select></label>' +
+    '<label><span>Size</span><input type="number" min="4" max="48" data-kind="point" data-field="size" data-index="' + index + '" value="' + point.size + '"></label>' +
+    '<label><span>Color</span><input type="color" data-kind="point" data-field="color" data-index="' + index + '" value="' + point.color + '"></label>' +
+    '</div>' +
+    '</div>' +
+    '</details>';
 }
 
-function renderPathGroup() {
-  if (state.drawnPaths.length === 0) {
-    return '<details class="tree-group" open><summary>Paths (0)</summary><div class="tree-empty">No paths or segments drawn.</div></details>';
-  }
+function renderPathFeature(path, index, selectedKey) {
+  const key = 'path-' + index;
+  const selected = selectedKey === key || (selectedKey && selectedKey.startsWith(key + '-point-'));
+  const label = path.points.length === 2 ? 'Segment ' : 'Path ';
+  const meta = path.points.length + ' pts, ' + formatDistance(path.distanceMeters);
+  const pointRows = path.points.map((point, pointIndex) => renderPathPointFeature(path, index, point, pointIndex, selectedKey)).join('');
+  return '<details class="tree-item' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
+    '<summary>' +
+    '<span class="tree-toggle"></span>' +
+    '<span><span class="tree-title">' + label + (index + 1) + '</span><span class="tree-meta">' + escapeHtml(meta) + '</span></span>' +
+    '<button class="tree-btn" type="button" data-action="focus-path" data-index="' + index + '">Go</button>' +
+    '<button class="tree-btn danger" type="button" data-action="delete-path" data-index="' + index + '">Del</button>' +
+    '</summary>' +
+    '<div class="tree-body">' +
+    '<div class="tree-grid">' +
+    '<label><span>Color</span><input type="color" data-kind="path" data-field="color" data-index="' + index + '" value="' + path.color + '"></label>' +
+    '<label><span>Width</span><input type="number" min="1" max="12" data-kind="path" data-field="width" data-index="' + index + '" value="' + path.width + '"></label>' +
+    '</div>' +
+    '<div class="tree-subhead">Points</div>' +
+    '<div class="element-tree">' + pointRows + '</div>' +
+    '</div>' +
+    '</details>';
+}
 
-  const items = state.drawnPaths.map((path, index) => {
-    const label = path.points.length === 2 ? 'Segment ' : 'Path ';
-    const meta = path.points.length + ' pts, ' + formatDistance(path.distanceMeters);
-    return '<div class="tree-item">' +
-      '<div class="tree-item-head">' +
-      '<div><div class="tree-title">' + label + (index + 1) + '</div><div class="tree-meta">' + escapeHtml(meta) + '</div></div>' +
-      '<button class="tree-btn" type="button" data-action="focus-path" data-index="' + index + '">Go</button>' +
-      '<button class="tree-btn danger" type="button" data-action="delete-path" data-index="' + index + '">Del</button>' +
-      '</div>' +
-      '<div class="tree-grid">' +
-      '<label><span>Color</span><input type="color" data-kind="path" data-field="color" data-index="' + index + '" value="' + path.color + '"></label>' +
-      '<label><span>Width</span><input type="number" min="1" max="12" data-kind="path" data-field="width" data-index="' + index + '" value="' + path.width + '"></label>' +
-      '</div>' +
-      '</div>';
-  }).join('');
-
-  return '<details class="tree-group" open><summary>Paths (' + state.drawnPaths.length + ')</summary><div class="tree-items">' + items + '</div></details>';
+function renderPathPointFeature(path, pathIndex, point, pointIndex, selectedKey) {
+  const key = 'path-' + pathIndex + '-point-' + pointIndex;
+  const selected = selectedKey === key;
+  const canDelete = path.points.length > 2;
+  return '<details class="tree-point' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
+    '<summary>' +
+    '<span class="tree-toggle"></span>' +
+    '<span><span class="tree-title">Point ' + (pointIndex + 1) + '</span><span class="tree-meta">' + point.lat.toFixed(6) + ', ' + point.lng.toFixed(6) + '</span></span>' +
+    '<button class="tree-btn" type="button" data-action="focus-path-point" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '">Go</button>' +
+    (canDelete ? '<button class="tree-btn danger" type="button" data-action="delete-path-point" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '">Del</button>' : '') +
+    '</summary>' +
+    '<div class="tree-body">' +
+    '<div class="tree-grid">' +
+    '<label><span>Lat</span><input type="number" step="0.000001" data-kind="path-point" data-field="lat" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '" value="' + point.lat + '"></label>' +
+    '<label><span>Lon</span><input type="number" step="0.000001" data-kind="path-point" data-field="lng" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '" value="' + point.lng + '"></label>' +
+    '</div>' +
+    '</div>' +
+    '</details>';
 }
 
 function markerTypeOptions(selectedType) {
@@ -788,21 +1184,36 @@ function markerTypeOptions(selectedType) {
 function handleElementTreeClick(event) {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
   const index = Number(button.dataset.index);
-  if (!Number.isInteger(index)) return;
+  const pathIndex = Number(button.dataset.pathIndex);
+  const pointIndex = Number(button.dataset.pointIndex);
 
   switch (button.dataset.action) {
     case 'focus-point':
+      if (!Number.isInteger(index)) return;
       focusPoint(index);
       break;
     case 'delete-point':
+      if (!Number.isInteger(index)) return;
       deletePoint(index);
       break;
     case 'focus-path':
+      if (!Number.isInteger(index)) return;
       focusPath(index);
       break;
     case 'delete-path':
+      if (!Number.isInteger(index)) return;
       deletePath(index);
+      break;
+    case 'focus-path-point':
+      if (!Number.isInteger(pathIndex) || !Number.isInteger(pointIndex)) return;
+      focusPathPoint(pathIndex, pointIndex);
+      break;
+    case 'delete-path-point':
+      if (!Number.isInteger(pathIndex) || !Number.isInteger(pointIndex)) return;
+      deletePathPoint(pathIndex, pointIndex);
       break;
   }
 }
@@ -812,10 +1223,17 @@ function handleElementTreeChange(event) {
   const kind = control.dataset.kind;
   const field = control.dataset.field;
   const index = Number(control.dataset.index);
-  if (!kind || !field || !Number.isInteger(index)) return;
+  if (!kind || !field) return;
 
-  if (kind === 'point') updatePointField(index, field, control.value);
-  if (kind === 'path') updatePathField(index, field, control.value);
+  if (kind === 'point' && Number.isInteger(index)) updatePointField(index, field, control.value);
+  if (kind === 'path' && Number.isInteger(index)) updatePathField(index, field, control.value);
+  if (kind === 'path-point') {
+    const pathIndex = Number(control.dataset.pathIndex);
+    const pointIndex = Number(control.dataset.pointIndex);
+    if (Number.isInteger(pathIndex) && Number.isInteger(pointIndex)) {
+      updatePathPointField(pathIndex, pointIndex, field, control.value);
+    }
+  }
 }
 
 function updatePointField(index, field, value) {
@@ -842,7 +1260,6 @@ function updatePointField(index, field, value) {
 
   updatePointMarker(point);
   savePoints();
-  renderElementTree();
 }
 
 function updatePathField(index, field, value) {
@@ -857,9 +1274,49 @@ function updatePathField(index, field, value) {
 
   path.line.setStyle({ color: path.color, weight: path.width });
   path.vertices.forEach((vertex) => vertex.setStyle(vertexStyle(path.color)));
+  highlightSelectedFeature();
   updatePathDistanceDisplay(path);
   savePaths();
-  renderElementTree();
+}
+
+function updatePathPointField(pathIndex, pointIndex, field, value) {
+  const path = state.drawnPaths[pathIndex];
+  if (!path || !path.points[pointIndex]) return;
+
+  const numeric = Number(value);
+  const isLat = field === 'lat';
+  const min = isLat ? -90 : -180;
+  const max = isLat ? 90 : 180;
+  if (!Number.isFinite(numeric) || numeric < min || numeric > max) {
+    showToast('Bad ' + (isLat ? 'lat' : 'lon') + ' value.');
+    renderElementTree();
+    return;
+  }
+
+  path.points[pointIndex] = L.latLng(
+    isLat ? numeric : path.points[pointIndex].lat,
+    isLat ? path.points[pointIndex].lng : numeric
+  );
+  updatePathGeometry(path);
+  savePaths();
+}
+
+function updatePathGeometry(path) {
+  path.distanceMeters = totalDistance(path.points);
+  path.line.setLatLngs(path.points);
+  path.vertices.forEach((vertex, index) => {
+    if (path.points[index]) vertex.setLatLng(path.points[index]);
+  });
+  updatePathDistanceDisplay(path);
+}
+
+function rebuildPathVertices(path) {
+  path.vertices.forEach((vertex) => state.pathLayer.removeLayer(vertex));
+  path.vertices = path.points.map((point, pointIndex) => {
+    const vertex = L.circleMarker(point, { ...vertexStyle(path.color), radius: 3 }).addTo(state.pathLayer);
+    wirePathVertex(path, vertex, pointIndex);
+    return vertex;
+  });
 }
 
 function focusPoint(index) {
@@ -876,11 +1333,19 @@ function focusPath(index) {
   path.line.openTooltip(distanceLabelLatLng(path.points, path.distanceMeters));
 }
 
+function focusPathPoint(pathIndex, pointIndex) {
+  const path = state.drawnPaths[pathIndex];
+  if (!path || !path.points[pointIndex]) return;
+  state.map.setView(path.points[pointIndex], Math.max(state.map.getZoom(), 16));
+}
+
 function deletePoint(index) {
   const point = state.pointRecords[index];
   if (!point) return;
   state.pointLayer.removeLayer(point.marker);
   state.pointRecords.splice(index, 1);
+  if (state.selected && state.selected.point === point) state.selected = null;
+  hideFeatureMenu();
   updateStats();
   savePoints();
   showToast('Deleted point.');
@@ -893,10 +1358,26 @@ function deletePath(index) {
   path.vertices.forEach((vertex) => state.pathLayer.removeLayer(vertex));
   removeDistanceLabels(path);
   state.drawnPaths.splice(index, 1);
+  if (state.selected && state.selected.path === path) state.selected = null;
+  hideFeatureMenu();
   updateStats();
   savePaths();
   updateDrawUi();
   showToast('Deleted path.');
+}
+
+function deletePathPoint(pathIndex, pointIndex) {
+  const path = state.drawnPaths[pathIndex];
+  if (!path || path.points.length <= 2 || !path.points[pointIndex]) return;
+  path.points.splice(pointIndex, 1);
+  const vertex = path.vertices.splice(pointIndex, 1)[0];
+  if (vertex) state.pathLayer.removeLayer(vertex);
+  rebuildPathVertices(path);
+  updatePathGeometry(path);
+  savePaths();
+  state.selected = { kind: 'path', path };
+  renderElementTree();
+  showToast('Deleted path point.');
 }
 
 function fitAllFeatures() {
@@ -994,6 +1475,174 @@ function savePaths() {
     color: path.color,
     width: path.width,
   })));
+}
+
+function restoreFileLibrary() {
+  const files = readStoredJson(STORAGE_KEYS.files);
+  state.files = Array.isArray(files) ? files.filter(isValidSnapshot).map(normalizeSnapshotSummary) : [];
+}
+
+function saveFileLibrary() {
+  writeStoredJson(STORAGE_KEYS.files, state.files);
+  renderFileList();
+}
+
+function saveCurrentFile() {
+  const name = cleanFileName(ui.fileNameInput.value || 'map-file');
+  const snapshot = createMapSnapshot(name);
+  state.files.unshift(snapshot);
+  state.files = state.files.slice(0, 30);
+  saveFileLibrary();
+  downloadText(name + '.json', JSON.stringify(snapshot, null, 2), 'application/json');
+  showToast('Saved ' + name + '.');
+}
+
+function createMapSnapshot(name) {
+  const center = state.map.getCenter();
+  return {
+    version: 1,
+    id: 'map-' + Date.now().toString(36),
+    name,
+    savedAt: new Date().toISOString(),
+    view: {
+      lat: roundCoord(center.lat),
+      lng: roundCoord(center.lng),
+      zoom: state.map.getZoom(),
+    },
+    basemap: ui.basemapSelect.value,
+    distanceUnits: ui.distanceUnits.value,
+    showDistanceLabels: ui.showDistanceLabels.checked,
+    points: state.pointRecords.map((point) => ({
+      lat: point.lat,
+      lon: point.lon,
+      type: point.type,
+      size: point.size,
+      color: point.color,
+    })),
+    paths: state.drawnPaths.map((path) => ({
+      points: path.points.map((point) => ({ lat: point.lat, lng: point.lng })),
+      color: path.color,
+      width: path.width,
+    })),
+  };
+}
+
+function renderFileList() {
+  if (!ui.fileList) return;
+  if (state.files.length === 0) {
+    ui.fileList.innerHTML = '<div class="tree-empty">No saved files in this browser.</div>';
+    return;
+  }
+  ui.fileList.innerHTML = state.files.map((file, index) => {
+    const meta = (file.points ? file.points.length : 0) + ' pts, ' + (file.paths ? file.paths.length : 0) + ' paths';
+    return '<div class="file-item">' +
+      '<div><div class="file-name">' + escapeHtml(file.name || 'map-file') + '</div><div class="file-meta">' + escapeHtml(meta) + '</div></div>' +
+      '<button class="tree-btn" type="button" data-action="open-file" data-index="' + index + '">Open</button>' +
+      '<button class="tree-btn" type="button" data-action="download-file" data-index="' + index + '">Save</button>' +
+      '<button class="tree-btn danger" type="button" data-action="delete-file" data-index="' + index + '">Del</button>' +
+      '</div>';
+  }).join('');
+}
+
+function handleFileListClick(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  if (!Number.isInteger(index) || !state.files[index]) return;
+  const file = state.files[index];
+
+  if (button.dataset.action === 'open-file') {
+    applyMapSnapshot(file);
+  } else if (button.dataset.action === 'download-file') {
+    const name = cleanFileName(file.name || 'map-file');
+    downloadText(name + '.json', JSON.stringify(file, null, 2), 'application/json');
+  } else if (button.dataset.action === 'delete-file') {
+    state.files.splice(index, 1);
+    saveFileLibrary();
+    showToast('Deleted saved file.');
+  }
+}
+
+function openComputerFile() {
+  const file = ui.openFileInput.files && ui.openFileInput.files[0];
+  ui.openFileInput.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(String(reader.result || ''));
+      if (!isValidSnapshot(parsed)) throw new Error('Not a map file');
+      const snapshot = normalizeImportedSnapshot(parsed, file.name.replace(/\.json$/i, ''));
+      state.files.unshift(snapshot);
+      state.files = state.files.slice(0, 30);
+      saveFileLibrary();
+      applyMapSnapshot(snapshot);
+    } catch (err) {
+      showToast(err.message || 'Could not open file.');
+    }
+  };
+  reader.onerror = () => showToast('Could not read file.');
+  reader.readAsText(file);
+}
+
+function applyMapSnapshot(snapshot) {
+  const file = normalizeImportedSnapshot(snapshot, snapshot.name || 'map-file');
+  clearAllElements(false, false);
+
+  if (file.basemap && state.baseLayers[file.basemap]) {
+    ui.basemapSelect.value = file.basemap;
+    changeBasemap();
+  }
+  if (file.distanceUnits && DISTANCE_UNITS[file.distanceUnits]) {
+    ui.distanceUnits.value = file.distanceUnits;
+    localStorage.setItem(STORAGE_KEYS.distanceUnits, file.distanceUnits);
+  }
+  ui.showDistanceLabels.checked = Boolean(file.showDistanceLabels);
+  localStorage.setItem(STORAGE_KEYS.showDistanceLabels, String(ui.showDistanceLabels.checked));
+
+  file.points.forEach((point) => addPoint(point));
+  file.paths.forEach((path) => {
+    const restored = normalizeStoredPath(path);
+    if (restored) addFinishedPath(restored.points, restored.style);
+  });
+
+  updateStats();
+  savePoints();
+  savePaths();
+  if (isValidView(file.view)) {
+    state.map.setView([Number(file.view.lat), Number(file.view.lng)], Number(file.view.zoom));
+  } else {
+    fitAllFeatures();
+  }
+  showToast('Opened ' + (file.name || 'map-file') + '.');
+}
+
+function isValidSnapshot(file) {
+  return file && typeof file === 'object' && Array.isArray(file.points) && Array.isArray(file.paths);
+}
+
+function normalizeSnapshotSummary(file) {
+  return normalizeImportedSnapshot(file, file.name || 'map-file');
+}
+
+function normalizeImportedSnapshot(file, fallbackName) {
+  return {
+    version: 1,
+    id: file.id || ('map-' + Date.now().toString(36)),
+    name: cleanFileName(file.name || fallbackName || 'map-file'),
+    savedAt: file.savedAt || new Date().toISOString(),
+    view: isValidView(file.view) ? file.view : null,
+    basemap: state.baseLayers[file.basemap] ? file.basemap : 'satellite',
+    distanceUnits: DISTANCE_UNITS[file.distanceUnits] ? file.distanceUnits : 'meters',
+    showDistanceLabels: Boolean(file.showDistanceLabels),
+    points: file.points.map(normalizeStoredPoint).filter(Boolean),
+    paths: file.paths.filter((path) => normalizeStoredPath(path)).map((path) => ({
+      points: path.points,
+      color: sanitizeColor(path.color, '#1c7ed6'),
+      width: clampNumber(Number(path.width), 1, 12, 4),
+    })),
+  };
 }
 
 function restoreSavedPoints() {
@@ -1095,6 +1744,16 @@ function escapeHtml(value) {
 function capitalize(value) {
   const text = String(value || '');
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function cleanFileName(value) {
+  const cleaned = String(value || 'map-file')
+    .trim()
+    .replace(/\.json$/i, '')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '_')
+    .replace(/^-+|-+$/g, '');
+  return cleaned || 'map-file';
 }
 
 function showErrors(errors) {
