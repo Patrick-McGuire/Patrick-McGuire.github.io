@@ -1,0 +1,104 @@
+<div id="topbar" role="toolbar" aria-label="Map tools">
+  <button id="panel-toggle" class="btn" type="button" title="Toggle point panel" aria-label="Toggle point panel">Menu</button>
+  <div class="brand">Map</div>
+  <select id="basemap-select" class="control" title="Base map" aria-label="Base map">
+    <option value="satellite">Satellite</option>
+    <option value="street">Street</option>
+  </select>
+  <button id="locate-btn" class="btn" type="button" title="Center on browser location">Locate</button>
+
+  <span class="divider"></span>
+
+  <button id="draw-path-btn" class="btn" type="button" title="Draw a multi-point path">Path</button>
+  <button id="draw-segment-btn" class="btn" type="button" title="Draw a two-point segment">Segment</button>
+  <button id="finish-path-btn" class="btn" type="button" disabled>Finish</button>
+  <button id="undo-point-btn" class="btn" type="button" disabled>Undo</button>
+  <button id="clear-active-btn" class="btn" type="button" disabled>Clear</button>
+  <button id="clear-paths-btn" class="btn danger" type="button" disabled>Clear Paths</button>
+
+  <label class="compact-field" title="Path color">
+    <span>Color</span>
+    <input id="path-color" type="color" value="#1c7ed6">
+  </label>
+  <label class="compact-field" title="Path width">
+    <span>Width</span>
+    <input id="path-width" type="number" min="1" max="12" value="4">
+  </label>
+
+  <span id="draw-status" class="status-chip">Ready</span>
+</div>
+
+<aside id="side-panel" class="side-panel" aria-label="Bulk plotting panel">
+  <div class="panel-head">
+    <h1>Plot Points</h1>
+    <button id="panel-close" class="btn ghost" type="button" title="Close panel">Close</button>
+  </div>
+
+  <div class="panel-scroll">
+    <section class="panel-section">
+      <label class="field-label" for="point-input">Points</label>
+      <textarea id="point-input" spellcheck="false" placeholder="42.3601,-71.0589,circle,14&#10;42.3584,-71.0636,pin,18&#10;42.3550,-71.0550,square,12"></textarea>
+
+      <div class="form-grid">
+        <label>
+          <span>Default type</span>
+          <select id="default-type">
+            <option value="circle">Circle</option>
+            <option value="pin">Pin</option>
+            <option value="square">Square</option>
+            <option value="triangle">Triangle</option>
+            <option value="diamond">Diamond</option>
+            <option value="cross">Cross</option>
+          </select>
+        </label>
+        <label>
+          <span>Default size</span>
+          <input id="default-size" type="number" min="4" max="48" value="14">
+        </label>
+        <label>
+          <span>Marker color</span>
+          <input id="default-color" type="color" value="#ff6b35">
+        </label>
+        <label class="check-row">
+          <input id="replace-existing" type="checkbox" checked>
+          <span>Replace</span>
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button id="plot-btn" class="btn primary" type="button">Plot</button>
+        <button id="fit-btn" class="btn" type="button">Fit</button>
+        <button id="clear-points-btn" class="btn danger" type="button">Clear Points</button>
+      </div>
+    </section>
+
+    <section class="panel-section">
+      <div class="summary-grid">
+        <div>
+          <span class="metric" id="point-count">0</span>
+          <span class="metric-label">points</span>
+        </div>
+        <div>
+          <span class="metric" id="path-count">0</span>
+          <span class="metric-label">paths</span>
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button id="sample-btn" class="btn" type="button">Sample</button>
+        <button id="export-points-btn" class="btn" type="button" disabled>Export Points</button>
+      </div>
+
+      <div id="error-box" class="error-box" hidden>
+        <div class="error-title">Skipped lines</div>
+        <ul id="error-list"></ul>
+      </div>
+    </section>
+  </div>
+</aside>
+
+<main id="map" aria-label="Satellite map"></main>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript>
+  <div class="noscript">JavaScript is required for this map.</div>
+</noscript>
