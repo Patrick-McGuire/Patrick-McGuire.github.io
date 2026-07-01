@@ -19,6 +19,12 @@ const ui = {
   toolPointType: $('tool-point-type'),
   toolPointSize: $('tool-point-size'),
   toolPointColor: $('tool-point-color'),
+  toolPointLat: $('tool-point-lat'),
+  toolPointLon: $('tool-point-lon'),
+  toolSegLat1: $('tool-seg-lat1'),
+  toolSegLon1: $('tool-seg-lon1'),
+  toolSegLat2: $('tool-seg-lat2'),
+  toolSegLon2: $('tool-seg-lon2'),
   toolUndoBtn: $('tool-undo-btn'),
   toolCancelBtn: $('tool-cancel-btn'),
   toolFinishBtn: $('tool-finish-btn'),
@@ -36,6 +42,7 @@ const ui = {
   pathWidth: $('path-width'),
   distanceUnits: $('distance-units'),
   showDistanceLabels: $('show-distance-labels'),
+  allowDragging: $('allow-dragging'),
   drawStatus: $('draw-status'),
   pointInput: $('point-input'),
   plotMode: $('plot-mode'),
@@ -50,7 +57,6 @@ const ui = {
   exportPointsBtn: $('export-points-btn'),
   fitElementsBtn: $('fit-elements-btn'),
   clearElementsBtn: $('clear-elements-btn'),
-  fileNameInput: $('file-name-input'),
   newFileBtn: $('new-file-btn'),
   downloadFileBtn: $('download-file-btn'),
   openComputerBtn: $('open-computer-btn'),
@@ -86,6 +92,7 @@ const STORAGE_KEYS = {
   panelCollapsed: 'mapPlotter.panelCollapsed',
   files: 'mapPlotter.files',
   currentFileId: 'mapPlotter.currentFileId',
+  allowDragging: 'mapPlotter.allowDragging',
 };
 
 const LEGACY_KEYS = {
@@ -115,7 +122,9 @@ const state = {
   pointRecords: [],
   drawnPaths: [],
   activePath: null,
+  pending: null,
   drawMode: null,
+  allowDragging: true,
   panelTab: 'plot',
   selected: null,
   dragEdit: null,
@@ -183,11 +192,19 @@ function wireUi() {
   ui.drawPointBtn.addEventListener('click', () => toggleDrawMode('point'));
   ui.drawPathBtn.addEventListener('click', () => toggleDrawMode('path'));
   ui.drawSegmentBtn.addEventListener('click', () => toggleDrawMode('segment'));
-  ui.toolUndoBtn.addEventListener('click', undoActivePoint);
+  ui.toolUndoBtn.addEventListener('click', toolUndo);
   ui.toolCancelBtn.addEventListener('click', cancelDrawing);
   ui.toolFinishBtn.addEventListener('click', confirmTool);
   ui.pathColor.addEventListener('input', refreshActivePathStyle);
   ui.pathWidth.addEventListener('input', refreshActivePathStyle);
+  ui.toolPointType.addEventListener('input', updatePointPreview);
+  ui.toolPointSize.addEventListener('input', updatePointPreview);
+  ui.toolPointColor.addEventListener('input', updatePointPreview);
+  ui.toolPointLat.addEventListener('input', () => syncPendingPointFromInputs());
+  ui.toolPointLon.addEventListener('input', () => syncPendingPointFromInputs());
+  [ui.toolSegLat1, ui.toolSegLon1, ui.toolSegLat2, ui.toolSegLon2].forEach((input) => {
+    input.addEventListener('input', () => syncPendingSegmentFromInputs());
+  });
   ui.distanceUnits.addEventListener('change', () => {
     updatePathDistanceDisplays();
     renderElementTree();
@@ -196,6 +213,11 @@ function wireUi() {
   ui.showDistanceLabels.addEventListener('change', () => {
     updatePathDistanceDisplays();
     autoSave();
+  });
+  ui.allowDragging.addEventListener('change', () => {
+    state.allowDragging = ui.allowDragging.checked;
+    localStorage.setItem(STORAGE_KEYS.allowDragging, String(state.allowDragging));
+    updateEditableInteractions();
   });
 
   ui.plotBtn.addEventListener('click', plotPointsFromInput);
@@ -216,7 +238,6 @@ function wireUi() {
   ui.elementTree.addEventListener('dragend', onTreeDragEnd);
   ui.newFileBtn.addEventListener('click', createNewFile);
   ui.downloadFileBtn.addEventListener('click', downloadCurrentFile);
-  ui.fileNameInput.addEventListener('change', renameCurrentFile);
   ui.openComputerBtn.addEventListener('click', () => ui.openFileInput.click());
   ui.openFileInput.addEventListener('change', openComputerFile);
   ui.fileList.addEventListener('click', handleFileListClick);
@@ -236,6 +257,10 @@ function wireUi() {
 function restorePreferences() {
   const panelCollapsed = localStorage.getItem(STORAGE_KEYS.panelCollapsed) === 'true';
   setPanelCollapsed(panelCollapsed);
+
+  const allowDragging = localStorage.getItem(STORAGE_KEYS.allowDragging);
+  state.allowDragging = allowDragging === null ? true : allowDragging === 'true';
+  ui.allowDragging.checked = state.allowDragging;
 }
 
 function setPanelCollapsed(collapsed) {
@@ -470,7 +495,7 @@ function wirePointMarker(point) {
     showFeatureMenuForSelection(event.originalEvent);
   });
   point.marker.on('dragstart', () => {
-    if (!canEditMapFeatures()) {
+    if (!canDragFeatures()) {
       point.marker.dragging.disable();
     } else {
       hideFeatureMenu();
@@ -552,9 +577,17 @@ function toggleDrawMode(mode) {
     return;
   }
 
-  clearActivePath(false);
+  resetDrawing();
+  clearAllToolCoordInputs();
   state.drawMode = mode;
-  if (mode !== 'point') createActivePath();
+  if (mode === 'path') {
+    createActivePath();
+  } else {
+    state.pending = { mode, points: [], markers: [], line: null };
+    if (mode === 'segment') {
+      state.pending.line = L.polyline([], { ...currentPathStyle(), dashArray: '6 7' }).addTo(state.activeLayer);
+    }
+  }
   resetToolName(mode);
   updateDrawUi();
 }
@@ -568,40 +601,256 @@ function createActivePath() {
   };
 }
 
+// Wipes any in-progress drawing (active path or pending point/segment) from the map.
+function resetDrawing() {
+  state.activeLayer.clearLayers();
+  state.activePath = null;
+  state.pending = null;
+}
+
 function handleMapClick(event) {
   if (!state.drawMode) return;
 
   if (state.drawMode === 'point') {
-    const defaults = currentToolPointStyle();
-    pushUndo();
-    const record = addPoint({
-      name: (ui.toolFeatureName.value || '').trim() || nextPointName(),
-      lat: event.latlng.lat,
-      lon: event.latlng.lng,
-      type: defaults.type,
-      size: defaults.size,
-      color: defaults.color,
-    });
-    updateStats();
-    autoSave();
-    resetToolName('point');
-    showToast('Added ' + record.name + '.');
+    setPendingPoint(event.latlng);
+    return;
+  }
+  if (state.drawMode === 'segment') {
+    addOrMovePendingSegment(event.latlng);
     return;
   }
 
+  // Path: each click drops another vertex; Enter/check finishes.
   if (!state.activePath) createActivePath();
-
   const latlng = event.latlng;
   state.activePath.points.push(latlng);
   state.activePath.line.setLatLngs(state.activePath.points);
   const vertex = L.circleMarker(latlng, vertexStyle()).addTo(state.activeLayer);
   state.activePath.vertices.push(vertex);
+  updateDrawUi();
+}
 
-  if (state.drawMode === 'segment' && state.activePath.points.length >= 2) {
-    finishActivePath(true);
-  } else {
-    updateDrawUi();
+// ----- pending point placement -----
+
+function setPendingPoint(latlng) {
+  if (!state.pending) return;
+  state.pending.points[0] = latlng;
+  ui.toolPointLat.value = roundCoord(latlng.lat);
+  ui.toolPointLon.value = roundCoord(latlng.lng);
+  updatePointPreview();
+  updateDrawUi();
+}
+
+function syncPendingPointFromInputs() {
+  if (!state.pending || state.pending.mode !== 'point') return;
+  const latlng = readToolPointLatLng();
+  if (latlng) {
+    state.pending.points[0] = latlng;
+    updatePointPreview();
+  } else if (ui.toolPointLat.value.trim() === '' && ui.toolPointLon.value.trim() === '') {
+    state.pending.points = [];
+    removePendingMarkers();
   }
+  updateDrawUi();
+}
+
+function updatePointPreview() {
+  if (!state.pending || state.pending.mode !== 'point') return;
+  const latlng = state.pending.points[0];
+  if (!latlng) {
+    removePendingMarkers();
+    return;
+  }
+  const style = currentToolPointStyle();
+  const icon = makeMarkerIcon(style.type, style.size, style.color);
+  if (state.pending.markers[0]) {
+    state.pending.markers[0].setLatLng(latlng);
+    state.pending.markers[0].setIcon(icon);
+  } else {
+    state.pending.markers[0] = L.marker(latlng, { icon, opacity: 0.65, interactive: false, keyboard: false }).addTo(state.activeLayer);
+  }
+}
+
+function commitPendingPoint() {
+  const latlng = readToolPointLatLng();
+  if (!latlng) {
+    showToast('Set a latitude and longitude, or click the map.');
+    return;
+  }
+  const style = currentToolPointStyle();
+  pushUndo();
+  const record = addPoint({
+    name: (ui.toolFeatureName.value || '').trim() || nextPointName(),
+    lat: latlng.lat,
+    lon: latlng.lng,
+    type: style.type,
+    size: style.size,
+    color: style.color,
+  });
+  updateStats();
+  autoSave();
+  resetPendingPoint();
+  resetToolName('point');
+  updateDrawUi();
+  showToast('Added ' + record.name + '.');
+}
+
+function resetPendingPoint() {
+  removePendingMarkers();
+  if (state.pending) state.pending.points = [];
+  ui.toolPointLat.value = '';
+  ui.toolPointLon.value = '';
+}
+
+function readToolPointLatLng() {
+  return parseLatLngInputs(ui.toolPointLat.value, ui.toolPointLon.value);
+}
+
+// ----- pending segment placement -----
+
+function addOrMovePendingSegment(latlng) {
+  if (!state.pending) return;
+  if (state.pending.points.filter(Boolean).length >= 2) {
+    showToast('Both points placed — drag them or edit the boxes.');
+    return;
+  }
+  const index = state.pending.points[0] ? 1 : 0;
+  state.pending.points[index] = latlng;
+  addSegmentVertexHandle(index);
+  updateSegmentPreviewLine();
+  writeSegmentBoxes();
+  updateDrawUi();
+}
+
+function addSegmentVertexHandle(index) {
+  if (state.pending.markers[index]) {
+    state.pending.markers[index].setLatLng(state.pending.points[index]);
+    return;
+  }
+  const marker = L.marker(state.pending.points[index], {
+    icon: makeVertexIcon(),
+    draggable: true,
+    keyboard: false,
+  }).addTo(state.activeLayer);
+  const onMove = () => {
+    state.pending.points[index] = marker.getLatLng();
+    updateSegmentPreviewLine();
+    writeSegmentBoxes();
+  };
+  marker.on('drag', onMove);
+  marker.on('dragend', () => { onMove(); updateDrawUi(); });
+  state.pending.markers[index] = marker;
+}
+
+function makeVertexIcon() {
+  return L.divIcon({
+    className: 'draw-vertex-icon',
+    html: '<span class="draw-vertex"></span>',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
+
+function syncPendingSegmentFromInputs() {
+  if (!state.pending || state.pending.mode !== 'segment') return;
+  setSegmentPointFromInput(0, parseLatLngInputs(ui.toolSegLat1.value, ui.toolSegLon1.value));
+  setSegmentPointFromInput(1, parseLatLngInputs(ui.toolSegLat2.value, ui.toolSegLon2.value));
+  updateSegmentPreviewLine();
+  updateDrawUi();
+}
+
+function setSegmentPointFromInput(index, latlng) {
+  if (!latlng) return;
+  state.pending.points[index] = latlng;
+  addSegmentVertexHandle(index);
+}
+
+function updateSegmentPreviewLine() {
+  if (state.pending && state.pending.line) {
+    state.pending.line.setLatLngs(state.pending.points.filter(Boolean));
+  }
+}
+
+function writeSegmentBoxes() {
+  const p0 = state.pending.points[0];
+  const p1 = state.pending.points[1];
+  ui.toolSegLat1.value = p0 ? roundCoord(p0.lat) : '';
+  ui.toolSegLon1.value = p0 ? roundCoord(p0.lng) : '';
+  ui.toolSegLat2.value = p1 ? roundCoord(p1.lat) : '';
+  ui.toolSegLon2.value = p1 ? roundCoord(p1.lng) : '';
+}
+
+function readSegmentPoints() {
+  const p0 = parseLatLngInputs(ui.toolSegLat1.value, ui.toolSegLon1.value);
+  const p1 = parseLatLngInputs(ui.toolSegLat2.value, ui.toolSegLon2.value);
+  return (p0 && p1) ? [p0, p1] : [];
+}
+
+function commitPendingSegment() {
+  const points = readSegmentPoints();
+  if (points.length < 2) {
+    showToast('Place or enter both points first.');
+    return;
+  }
+  const name = (ui.toolFeatureName.value || '').trim() || defaultPathName(points);
+  pushUndo();
+  const path = addFinishedPath(points, currentPathStyle(), name);
+  updateStats();
+  autoSave();
+  resetPendingSegment();
+  resetToolName('segment');
+  updateDrawUi();
+  showToast('Saved ' + path.name + ': ' + formatDistance(path.distanceMeters) + '.');
+}
+
+function resetPendingSegment() {
+  removePendingMarkers();
+  if (state.pending) {
+    state.pending.points = [];
+    if (state.pending.line) state.pending.line.setLatLngs([]);
+  }
+  ui.toolSegLat1.value = '';
+  ui.toolSegLon1.value = '';
+  ui.toolSegLat2.value = '';
+  ui.toolSegLon2.value = '';
+}
+
+function undoPendingSegmentPoint() {
+  if (!state.pending) return;
+  const count = state.pending.points.filter(Boolean).length;
+  if (count === 0) return;
+  const index = count - 1;
+  const marker = state.pending.markers[index];
+  if (marker) state.activeLayer.removeLayer(marker);
+  state.pending.markers.length = index;
+  state.pending.points.length = index;
+  updateSegmentPreviewLine();
+  writeSegmentBoxes();
+  updateDrawUi();
+}
+
+function removePendingMarkers() {
+  if (!state.pending) return;
+  state.pending.markers.forEach((marker) => { if (marker) state.activeLayer.removeLayer(marker); });
+  state.pending.markers = [];
+}
+
+function parseLatLngInputs(latStr, lonStr) {
+  if (String(latStr).trim() === '' || String(lonStr).trim() === '') return null;
+  const lat = Number(latStr);
+  const lon = Number(lonStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return L.latLng(lat, lon);
+}
+
+function clearAllToolCoordInputs() {
+  ui.toolPointLat.value = '';
+  ui.toolPointLon.value = '';
+  ui.toolSegLat1.value = '';
+  ui.toolSegLon1.value = '';
+  ui.toolSegLat2.value = '';
+  ui.toolSegLon2.value = '';
 }
 
 // Enter / green check: commit the active path and immediately begin the next one.
@@ -614,18 +863,15 @@ function finishActivePath(continueDrawing) {
   }
 
   const points = active.points.map((point) => L.latLng(point.lat, point.lng));
-  const style = currentPathStyle();
-  const mode = state.drawMode;
   const name = (ui.toolFeatureName.value || '').trim() || defaultPathName(points);
   pushUndo();
-  const path = addFinishedPath(points, style, name);
+  const path = addFinishedPath(points, currentPathStyle(), name);
   state.activeLayer.clearLayers();
   state.activePath = null;
 
-  if (continueDrawing && (mode === 'segment' || mode === 'path')) {
-    state.drawMode = mode;
+  if (continueDrawing) {
     createActivePath();
-    resetToolName(mode);
+    resetToolName('path');
   } else {
     state.drawMode = null;
   }
@@ -636,19 +882,23 @@ function finishActivePath(continueDrawing) {
   showToast('Saved ' + path.name + ': ' + formatDistance(path.distanceMeters) + '.');
 }
 
-// Green check button behaviour depends on the active tool.
+// Green check / Enter behaviour depends on the active tool.
 function confirmTool() {
-  if (state.drawMode === 'point') {
-    state.drawMode = null;
-    updateDrawUi();
-    return;
-  }
-  finishActivePath(true);
+  if (state.drawMode === 'point') commitPendingPoint();
+  else if (state.drawMode === 'segment') commitPendingSegment();
+  else if (state.drawMode === 'path') finishActivePath(true);
+}
+
+// Undo button in the dialog: drop the last placed point of the current drawing.
+function toolUndo() {
+  if (state.drawMode === 'path') undoActivePoint();
+  else if (state.drawMode === 'segment') undoPendingSegmentPoint();
 }
 
 // Esc / red X: drop the in-progress drawing and leave the tool.
 function cancelDrawing() {
-  clearActivePath(false);
+  resetDrawing();
+  clearAllToolCoordInputs();
   state.drawMode = null;
   updateDrawUi();
 }
@@ -688,7 +938,7 @@ function wirePathFeature(path) {
     showFeatureMenuForSelection(event.originalEvent);
   });
   path.line.on('mousedown', (event) => {
-    if (!canEditMapFeatures() || isRightClick(event)) return;
+    if (!canDragFeatures() || isRightClick(event)) return;
     stopLeafletEvent(event);
     selectFeature({ kind: 'path', path }, true);
     startPathDrag(path, event.latlng);
@@ -709,7 +959,7 @@ function wirePathVertex(path, vertex, pointIndex) {
     showFeatureMenuForSelection(event.originalEvent);
   });
   vertex.on('mousedown', (event) => {
-    if (!canEditMapFeatures() || isRightClick(event)) return;
+    if (!canDragFeatures() || isRightClick(event)) return;
     stopLeafletEvent(event);
     selectFeature({ kind: 'path-point', path, pointIndex }, true);
     startPathPointDrag(path, pointIndex);
@@ -793,14 +1043,6 @@ function undoActivePoint() {
   updateDrawUi();
 }
 
-function clearActivePath(showMessage = true) {
-  state.activeLayer.clearLayers();
-  state.activePath = null;
-  state.drawMode = null;
-  updateDrawUi();
-  if (showMessage) showToast('Cleared active drawing.');
-}
-
 function clearAllElements(confirmFirst = true) {
   if (state.pointRecords.length === 0 && state.drawnPaths.length === 0 && !state.activePath) {
     showToast('Nothing to clear.');
@@ -818,6 +1060,7 @@ function clearAllElements(confirmFirst = true) {
 function clearElementsInternal() {
   state.activeLayer.clearLayers();
   state.activePath = null;
+  state.pending = null;
   state.drawMode = null;
   state.pointLayer.clearLayers();
   state.pointRecords = [];
@@ -829,10 +1072,14 @@ function clearElementsInternal() {
 }
 
 function refreshActivePathStyle() {
-  if (!state.activePath) return;
   const style = currentPathStyle();
-  state.activePath.line.setStyle({ ...style, dashArray: '6 7' });
-  state.activePath.vertices.forEach((vertex) => vertex.setStyle(vertexStyle()));
+  if (state.activePath) {
+    state.activePath.line.setStyle({ ...style, dashArray: '6 7' });
+    state.activePath.vertices.forEach((vertex) => vertex.setStyle(vertexStyle()));
+  }
+  if (state.pending && state.pending.line) {
+    state.pending.line.setStyle({ ...style, dashArray: '6 7' });
+  }
 }
 
 function currentPathStyle() {
@@ -867,20 +1114,23 @@ function vertexStyle(color) {
 
 function updateDrawUi() {
   const activePoints = state.activePath ? state.activePath.points.length : 0;
+  const pendingCount = state.pending ? state.pending.points.filter(Boolean).length : 0;
   hideFeatureMenu();
   updateEditableInteractions();
   updateToolOptionsUi();
   ui.drawPointBtn.classList.toggle('active', state.drawMode === 'point');
   ui.drawPathBtn.classList.toggle('active', state.drawMode === 'path');
   ui.drawSegmentBtn.classList.toggle('active', state.drawMode === 'segment');
-  ui.toolUndoBtn.disabled = activePoints === 0;
-  ui.toolFinishBtn.disabled = state.drawMode !== 'point' && activePoints < 2;
+  ui.toolFinishBtn.disabled = !canFinishDrawing();
+  if (state.drawMode === 'path') ui.toolUndoBtn.disabled = activePoints === 0;
+  else if (state.drawMode === 'segment') ui.toolUndoBtn.disabled = pendingCount === 0;
+  else ui.toolUndoBtn.disabled = true;
   state.map.getContainer().classList.toggle('is-drawing', Boolean(state.drawMode));
 
   if (state.drawMode === 'point') {
-    ui.drawStatus.textContent = 'Point: click map';
+    ui.drawStatus.textContent = pendingCount ? 'Point set — check to add' : 'Point: click map or type';
   } else if (state.drawMode === 'segment') {
-    ui.drawStatus.textContent = 'Segment: ' + activePoints + '/2';
+    ui.drawStatus.textContent = 'Segment: ' + pendingCount + '/2';
   } else if (state.drawMode === 'path') {
     ui.drawStatus.textContent = 'Path: ' + activePoints + ' pt' + (activePoints === 1 ? '' : 's');
   } else {
@@ -888,11 +1138,18 @@ function updateDrawUi() {
   }
 }
 
+function canFinishDrawing() {
+  if (state.drawMode === 'point') return Boolean(readToolPointLatLng());
+  if (state.drawMode === 'segment') return readSegmentPoints().length === 2;
+  if (state.drawMode === 'path') return Boolean(state.activePath) && state.activePath.points.length >= 2;
+  return false;
+}
+
 function updateEditableInteractions() {
-  const editable = canEditMapFeatures();
+  const draggable = canDragFeatures();
   state.pointRecords.forEach((point) => {
     if (point.marker.dragging) {
-      if (editable) point.marker.dragging.enable();
+      if (draggable) point.marker.dragging.enable();
       else point.marker.dragging.disable();
     }
   });
@@ -900,6 +1157,10 @@ function updateEditableInteractions() {
 
 function canEditMapFeatures() {
   return !state.drawMode && !state.dragEdit;
+}
+
+function canDragFeatures() {
+  return canEditMapFeatures() && state.allowDragging;
 }
 
 function selectFeature(selection, scrollTree) {
@@ -1043,8 +1304,9 @@ function isRightClick(event) {
 function updateToolOptionsUi() {
   const hasTool = state.drawMode === 'point' || state.drawMode === 'path' || state.drawMode === 'segment';
   ui.toolOptions.hidden = !hasTool;
-  ui.toolOptions.classList.toggle('point-mode', state.drawMode === 'point');
-  ui.toolOptions.classList.toggle('line-mode', state.drawMode === 'path' || state.drawMode === 'segment');
+  ui.toolOptions.classList.toggle('mode-point', state.drawMode === 'point');
+  ui.toolOptions.classList.toggle('mode-segment', state.drawMode === 'segment');
+  ui.toolOptions.classList.toggle('mode-path', state.drawMode === 'path');
   if (state.drawMode === 'point') ui.toolOptionsTitle.textContent = 'New Point';
   else if (state.drawMode === 'segment') ui.toolOptionsTitle.textContent = 'New Segment';
   else if (state.drawMode === 'path') ui.toolOptionsTitle.textContent = 'New Path';
@@ -1676,7 +1938,7 @@ function totalLabelLatLng(points) {
 
 function handleKeydown(event) {
   const editing = isEditableTarget(event.target);
-  const inToolName = event.target === ui.toolFeatureName;
+  const inToolField = Boolean(event.target.closest && event.target.closest('#tool-options'));
   const ctrl = event.ctrlKey || event.metaKey;
 
   if (event.key === 'Escape') {
@@ -1690,11 +1952,10 @@ function handleKeydown(event) {
     return;
   }
 
-  if (event.key === 'Enter' && state.drawMode && state.drawMode !== 'point' && (!editing || inToolName)) {
-    if (state.activePath && state.activePath.points.length >= 2) {
-      finishActivePath(true);
-      event.preventDefault();
-    }
+  // Enter commits the current point/segment/path and starts the next one.
+  if (event.key === 'Enter' && state.drawMode && (!editing || inToolField)) {
+    confirmTool();
+    event.preventDefault();
     return;
   }
 
@@ -1759,6 +2020,11 @@ function restoreDoc(doc) {
 function undo() {
   if (state.activePath && state.activePath.points.length > 0) {
     undoActivePoint();
+    return;
+  }
+  if (state.pending && state.pending.points.filter(Boolean).length > 0) {
+    if (state.pending.mode === 'segment') undoPendingSegmentPoint();
+    else { resetPendingPoint(); updateDrawUi(); }
     return;
   }
   if (state.undoStack.length === 0) {
@@ -1931,7 +2197,6 @@ function applyFile(file) {
   });
 
   state.currentFileId = file.id;
-  ui.fileNameInput.value = file.name;
   state.suppressAutoSave = false;
   state.undoStack = [];
   state.redoStack = [];
@@ -1953,7 +2218,7 @@ function currentSnapshot() {
   return {
     version: 2,
     id: state.currentFileId,
-    name: existing ? existing.name : (ui.fileNameInput.value.trim() || 'Untitled'),
+    name: existing ? existing.name : 'Untitled',
     savedAt: new Date().toISOString(),
     view: {
       lat: roundCoord(center.lat),
@@ -1992,14 +2257,6 @@ function createNewFile() {
   showToast('Started ' + file.name + '.');
 }
 
-function renameCurrentFile() {
-  const name = ui.fileNameInput.value.trim() || 'Untitled';
-  ui.fileNameInput.value = name;
-  const file = state.files.find((entry) => entry.id === state.currentFileId);
-  if (file) file.name = name;
-  autoSave();
-}
-
 function downloadCurrentFile() {
   const snapshot = currentSnapshot();
   downloadText(cleanFileName(snapshot.name) + '.json', JSON.stringify(snapshot, null, 2), 'application/json');
@@ -2035,7 +2292,11 @@ function renderFileList() {
     ui.fileList.innerHTML = '<div class="tree-empty">No saved files in this browser.</div>';
     return;
   }
-  ui.fileList.innerHTML = state.files.map((file, index) => {
+  // Show the open file at the top; keep data-index pointing at the real array slot.
+  const order = state.files.map((file, index) => index)
+    .sort((a, b) => (state.files[b].id === state.currentFileId ? 1 : 0) - (state.files[a].id === state.currentFileId ? 1 : 0));
+  ui.fileList.innerHTML = order.map((index) => {
+    const file = state.files[index];
     const meta = (file.points ? file.points.length : 0) + ' pts · ' + (file.paths ? file.paths.length : 0) + ' paths';
     const current = file.id === state.currentFileId;
     const name = file.name || 'Untitled';
@@ -2089,7 +2350,6 @@ function handleFileListChange(event) {
   if (!file) return;
   const name = input.value.trim() || 'Untitled';
   file.name = name;
-  if (file.id === state.currentFileId) ui.fileNameInput.value = name;
   persistLibrary();
 }
 

@@ -334,9 +334,37 @@ body.panel-collapsed .tool-options {
   padding: 2px;
 }
 
-.tool-options.point-mode .tool-line-only,
-.tool-options.line-mode .tool-point-only {
+.tool-option-row.two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.tool-point-only,
+.tool-line-only,
+.tool-point-coords,
+.tool-segment-coords {
   display: none;
+}
+
+.tool-options.mode-point .tool-point-only,
+.tool-options.mode-point .tool-point-coords {
+  display: grid;
+}
+
+.tool-options.mode-segment .tool-line-only,
+.tool-options.mode-path .tool-line-only {
+  display: grid;
+}
+
+.tool-options.mode-segment .tool-segment-coords {
+  display: grid;
+  gap: 8px;
+}
+
+.tool-coord-label {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .tool-name-row {
@@ -411,7 +439,7 @@ body.panel-collapsed .tool-options {
   background: var(--danger-hot);
 }
 
-.tool-options.point-mode #tool-undo-btn {
+.tool-options.mode-point #tool-undo-btn {
   display: none;
 }
 
@@ -969,6 +997,12 @@ details.drop-after > summary {
 
 .file-item.current {
   border-color: var(--accent);
+  background: rgba(28, 126, 214, 0.16);
+  box-shadow: inset 3px 0 0 0 var(--accent);
+}
+
+.file-item.current:hover {
+  background: rgba(28, 126, 214, 0.22);
 }
 
 .file-list {
@@ -1093,6 +1127,22 @@ details.drop-after > summary {
   inset: 30%;
   border-radius: 50%;
   background: #fff;
+}
+
+.draw-vertex-icon {
+  background: transparent;
+  border: 0;
+}
+
+.draw-vertex {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  cursor: grab;
 }
 
 .distance-label-icon {
