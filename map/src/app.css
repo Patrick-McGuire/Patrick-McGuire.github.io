@@ -660,6 +660,13 @@ button:focus-visible {
   transform: translate(-50%, -135%);
 }
 
+.distance-label.total {
+  border-color: rgba(28, 126, 214, 0.95);
+  background: rgba(17, 20, 24, 0.94);
+  color: #d8ecff;
+  font-weight: 700;
+}
+
 .toast {
   position: fixed;
   z-index: 950;

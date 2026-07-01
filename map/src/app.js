@@ -526,7 +526,8 @@ function addFinishedPath(points, style) {
     line,
     vertices,
     distanceMeters,
-    labelMarker: null,
+    segmentLabelMarkers: [],
+    totalLabelMarker: null,
     color: pathStyle.color,
     width: pathStyle.weight,
   };
@@ -648,28 +649,76 @@ function updatePathDistanceDisplay(path) {
   else path.line.bindTooltip(text, { sticky: true, opacity: 0.95 });
 
   if (ui.showDistanceLabels.checked) {
-    const labelLatLng = distanceLabelLatLng(path.points, path.distanceMeters);
-    if (!labelLatLng) return;
-    const icon = L.divIcon({
-      className: 'distance-label-icon',
-      html: '<span class="distance-label">' + escapeHtml(text) + '</span>',
-      iconSize: [0, 0],
-      iconAnchor: [0, 0],
-    });
-    if (path.labelMarker) {
-      path.labelMarker.setLatLng(labelLatLng);
-      path.labelMarker.setIcon(icon);
-    } else {
-      path.labelMarker = L.marker(labelLatLng, {
-        icon,
-        interactive: false,
-        keyboard: false,
-      }).addTo(state.pathLayer);
-    }
-  } else if (path.labelMarker) {
-    state.pathLayer.removeLayer(path.labelMarker);
-    path.labelMarker = null;
+    updateSegmentDistanceLabels(path);
+    updateTotalDistanceLabel(path, text);
+  } else {
+    removeDistanceLabels(path);
   }
+}
+
+function updateSegmentDistanceLabels(path) {
+  if (!Array.isArray(path.segmentLabelMarkers)) path.segmentLabelMarkers = [];
+  const segmentCount = Math.max(0, path.points.length - 1);
+
+  for (let i = 0; i < segmentCount; i += 1) {
+    const start = path.points[i];
+    const end = path.points[i + 1];
+    const text = formatDistance(start.distanceTo(end));
+    const latlng = segmentMidpoint(start, end);
+    const icon = makeDistanceLabelIcon(text, 'segment');
+
+    if (path.segmentLabelMarkers[i]) {
+      path.segmentLabelMarkers[i].setLatLng(latlng);
+      path.segmentLabelMarkers[i].setIcon(icon);
+    } else {
+      path.segmentLabelMarkers[i] = makeDistanceLabelMarker(latlng, icon);
+    }
+  }
+
+  while (path.segmentLabelMarkers.length > segmentCount) {
+    const marker = path.segmentLabelMarkers.pop();
+    state.pathLayer.removeLayer(marker);
+  }
+}
+
+function updateTotalDistanceLabel(path, text) {
+  const labelLatLng = totalLabelLatLng(path.points);
+  if (!labelLatLng) return;
+  const icon = makeDistanceLabelIcon('Total: ' + text, 'total');
+  if (path.totalLabelMarker) {
+    path.totalLabelMarker.setLatLng(labelLatLng);
+    path.totalLabelMarker.setIcon(icon);
+  } else {
+    path.totalLabelMarker = makeDistanceLabelMarker(labelLatLng, icon);
+  }
+}
+
+function removeDistanceLabels(path) {
+  if (Array.isArray(path.segmentLabelMarkers)) {
+    path.segmentLabelMarkers.forEach((marker) => state.pathLayer.removeLayer(marker));
+  }
+  path.segmentLabelMarkers = [];
+  if (path.totalLabelMarker) {
+    state.pathLayer.removeLayer(path.totalLabelMarker);
+    path.totalLabelMarker = null;
+  }
+}
+
+function makeDistanceLabelMarker(latlng, icon) {
+  return L.marker(latlng, {
+    icon,
+    interactive: false,
+    keyboard: false,
+  }).addTo(state.pathLayer);
+}
+
+function makeDistanceLabelIcon(text, type) {
+  return L.divIcon({
+    className: 'distance-label-icon',
+    html: '<span class="distance-label ' + type + '">' + escapeHtml(text) + '</span>',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
 }
 
 function renderElementTree() {
@@ -842,7 +891,7 @@ function deletePath(index) {
   if (!path) return;
   state.pathLayer.removeLayer(path.line);
   path.vertices.forEach((vertex) => state.pathLayer.removeLayer(vertex));
-  if (path.labelMarker) state.pathLayer.removeLayer(path.labelMarker);
+  removeDistanceLabels(path);
   state.drawnPaths.splice(index, 1);
   updateStats();
   savePaths();
@@ -905,6 +954,18 @@ function distanceLabelLatLng(points, distanceMeters) {
     }
     traveled += segment;
   }
+  return points[points.length - 1];
+}
+
+function segmentMidpoint(start, end) {
+  return L.latLng(
+    start.lat + (end.lat - start.lat) / 2,
+    start.lng + (end.lng - start.lng) / 2
+  );
+}
+
+function totalLabelLatLng(points) {
+  if (!points.length) return null;
   return points[points.length - 1];
 }
 
