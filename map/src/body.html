@@ -18,10 +18,6 @@
   <button id="draw-path-btn" class="btn tool-btn" type="button" title="Draw a multi-point path">
     <span class="tool-icon path-icon"></span><span>Path</span>
   </button>
-  <button id="finish-path-btn" class="btn" type="button" disabled>Finish</button>
-  <button id="undo-point-btn" class="btn" type="button" disabled>Undo</button>
-  <button id="clear-active-btn" class="btn" type="button" disabled>Clear</button>
-  <button id="clear-paths-btn" class="btn danger" type="button" disabled>Clear Paths</button>
   <label class="compact-field" title="Distance units">
     <span>Units</span>
     <select id="distance-units">
@@ -41,7 +37,13 @@
 </div>
 
 <div id="tool-options" class="tool-options" hidden>
-  <div class="tool-options-title" id="tool-options-title">Tool Options</div>
+  <div class="tool-options-title" id="tool-options-title">New Point</div>
+  <div class="tool-option-row tool-name-row">
+    <label class="full">
+      <span>Name</span>
+      <input id="tool-feature-name" type="text" placeholder="Point 1">
+    </label>
+  </div>
   <div class="tool-option-row tool-point-only">
     <label>
       <span>Type</span>
@@ -72,6 +74,12 @@
       <span>Width</span>
       <input id="path-width" type="number" min="1" max="12" value="4">
     </label>
+  </div>
+  <div class="tool-actions">
+    <button id="tool-undo-btn" class="icon-btn" type="button" title="Undo last point (Ctrl+Z)" disabled>&#8630;</button>
+    <span class="tool-actions-spacer"></span>
+    <button id="tool-cancel-btn" class="icon-btn cancel" type="button" title="Cancel (Esc)">&#10005;</button>
+    <button id="tool-finish-btn" class="icon-btn confirm" type="button" title="Finish (Enter)">&#10003;</button>
   </div>
 </div>
 
@@ -177,10 +185,11 @@
 
   <div id="files-panel" class="panel-scroll panel-tab-panel" role="tabpanel" aria-labelledby="files-tab-btn">
     <section class="panel-section">
-      <label class="field-label" for="file-name-input">File name</label>
-      <input id="file-name-input" class="wide-input" type="text" value="map-file">
+      <label class="field-label" for="file-name-input">Current file</label>
+      <input id="file-name-input" class="wide-input" type="text" value="Untitled">
       <div class="button-row compact-actions">
-        <button id="save-file-btn" class="btn primary" type="button">Save + Download</button>
+        <button id="new-file-btn" class="btn primary" type="button">New</button>
+        <button id="download-file-btn" class="btn" type="button">Download</button>
         <button id="open-computer-btn" class="btn" type="button">Open File</button>
         <input id="open-file-input" type="file" accept="application/json,.json" hidden>
       </div>

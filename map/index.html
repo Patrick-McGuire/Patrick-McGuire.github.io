@@ -959,7 +959,7 @@ textarea {
   position: fixed;
   z-index: 850;
   top: calc(var(--topbar-height) + 8px);
-  left: 12px;
+  left: calc(min(var(--panel-width), 100vw) + 24px);
   display: grid;
   gap: 8px;
   width: min(330px, calc(100vw - 24px));
@@ -968,6 +968,10 @@ textarea {
   border-radius: var(--radius);
   background: rgba(21, 26, 32, 0.96);
   box-shadow: var(--shadow);
+}
+
+body.panel-collapsed .tool-options {
+  left: 12px;
 }
 
 .tool-options[hidden] {
@@ -1018,6 +1022,82 @@ textarea {
   display: none;
 }
 
+.tool-name-row {
+  grid-template-columns: 1fr;
+}
+
+.tool-option-row label.full {
+  grid-column: 1 / -1;
+}
+
+.tool-name-row input {
+  width: 100%;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 7px;
+  background: #0d1014;
+  color: var(--text);
+}
+
+.tool-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.tool-actions-spacer {
+  flex: 1 1 auto;
+}
+
+.icon-btn {
+  height: 32px;
+  min-width: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.icon-btn.confirm {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.icon-btn.confirm:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.icon-btn.cancel {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.icon-btn.cancel:hover:not(:disabled) {
+  background: var(--danger-hot);
+}
+
+.tool-options.point-mode #tool-undo-btn {
+  display: none;
+}
+
 .feature-menu {
   position: fixed;
   z-index: 1000;
@@ -1049,6 +1129,10 @@ textarea {
 
 .feature-menu-fields label {
   min-width: 0;
+}
+
+.feature-menu-fields label.full {
+  grid-column: 1 / -1;
 }
 
 .feature-menu-fields span {
@@ -1320,67 +1404,51 @@ button:focus-visible {
 }
 
 .element-tree {
-  display: grid;
-  gap: 6px;
-}
-
-.tree-group {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: #0d1014;
-  overflow: hidden;
-}
-
-.tree-group summary {
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 8px;
-  color: var(--text);
-  cursor: pointer;
-  font-weight: 650;
+  display: block;
 }
 
 .tree-items {
-  display: grid;
-  gap: 6px;
-  padding: 0 8px 8px;
+  display: block;
 }
 
 .tree-empty {
-  padding: 10px 8px 12px;
+  padding: 10px 4px 12px;
   color: var(--muted);
   font-size: 12px;
 }
 
-.tree-item {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0;
-  background: var(--panel);
-  overflow: hidden;
-}
-
-.tree-item.selected,
-.tree-point.selected {
-  border-color: var(--accent);
+.tree-item,
+.tree-point {
+  border: 0;
+  background: transparent;
 }
 
 .tree-item summary,
 .tree-point summary {
-  display: grid;
-  grid-template-columns: 24px 1fr auto auto;
-  gap: 4px;
+  display: flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 7px;
+  gap: 8px;
+  min-height: 28px;
+  padding: 2px 6px;
   cursor: pointer;
   list-style: none;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
 }
 
-.tree-point summary {
-  grid-template-columns: 24px 1fr auto auto;
-  min-height: 30px;
+.tree-item > summary:hover,
+.tree-point > summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tree-item.selected > summary,
+.tree-point.selected > summary {
+  background: rgba(28, 126, 214, 0.18);
+  border-left-color: var(--accent);
+}
+
+.tree-point > summary {
+  padding-left: 22px;
 }
 
 .tree-item summary::-webkit-details-marker,
@@ -1389,36 +1457,64 @@ button:focus-visible {
 }
 
 .tree-toggle {
-  width: 18px;
-  height: 18px;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: #0d1014;
-  color: var(--text);
+  color: var(--muted);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .tree-item[open] > summary .tree-toggle::before,
 .tree-point[open] > summary .tree-toggle::before {
-  content: "-";
+  content: "\25be";
 }
 
 .tree-item:not([open]) > summary .tree-toggle::before,
 .tree-point:not([open]) > summary .tree-toggle::before {
-  content: "+";
+  content: "\25b8";
+}
+
+.tree-ico {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+.tree-ico.point {
+  border-radius: 50%;
+}
+
+.tree-ico.path,
+.tree-ico.segment {
+  height: 3px;
+  border-radius: 999px;
+}
+
+.tree-ico.vertex {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--muted);
+  background: transparent;
 }
 
 .tree-body {
-  display: grid;
-  gap: 7px;
-  padding: 0 7px 8px 31px;
-  border-top: 1px solid var(--border);
+  display: block;
+  padding: 4px 6px 8px 30px;
+}
+
+.tree-point .tree-body {
+  padding-left: 44px;
 }
 
 .tree-subhead {
+  margin: 6px 0 2px 30px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
@@ -1426,21 +1522,52 @@ button:focus-visible {
 }
 
 .tree-title {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text);
-  font-weight: 650;
 }
 
 .tree-meta {
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
+  margin-left: 8px;
   color: var(--muted);
   font-family: var(--mono);
   font-size: 11px;
   white-space: nowrap;
+}
+
+.prop {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.prop:last-child {
+  margin-bottom: 0;
+}
+
+.prop > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.prop input,
+.prop select {
+  width: 100%;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 6px;
+  background: #0d1014;
+  color: var(--text);
+}
+
+.prop input[type="color"] {
+  padding: 2px;
 }
 
 .tree-btn {
@@ -1465,43 +1592,8 @@ button:focus-visible {
   color: #fff;
 }
 
-.tree-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.tree-grid label {
-  min-width: 0;
-}
-
-.tree-grid span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.tree-grid input,
-.tree-grid select {
-  width: 100%;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0 6px;
-  background: #0d1014;
-  color: var(--text);
-}
-
-.tree-grid input[type="color"] {
-  padding: 2px;
-}
-
-.tree-point {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: #11161c;
-  overflow: hidden;
+.file-item.current {
+  border-color: var(--accent);
 }
 
 .file-list {
@@ -1727,10 +1819,6 @@ button:focus-visible {
   <button id="draw-path-btn" class="btn tool-btn" type="button" title="Draw a multi-point path">
     <span class="tool-icon path-icon"></span><span>Path</span>
   </button>
-  <button id="finish-path-btn" class="btn" type="button" disabled>Finish</button>
-  <button id="undo-point-btn" class="btn" type="button" disabled>Undo</button>
-  <button id="clear-active-btn" class="btn" type="button" disabled>Clear</button>
-  <button id="clear-paths-btn" class="btn danger" type="button" disabled>Clear Paths</button>
   <label class="compact-field" title="Distance units">
     <span>Units</span>
     <select id="distance-units">
@@ -1750,7 +1838,13 @@ button:focus-visible {
 </div>
 
 <div id="tool-options" class="tool-options" hidden>
-  <div class="tool-options-title" id="tool-options-title">Tool Options</div>
+  <div class="tool-options-title" id="tool-options-title">New Point</div>
+  <div class="tool-option-row tool-name-row">
+    <label class="full">
+      <span>Name</span>
+      <input id="tool-feature-name" type="text" placeholder="Point 1">
+    </label>
+  </div>
   <div class="tool-option-row tool-point-only">
     <label>
       <span>Type</span>
@@ -1781,6 +1875,12 @@ button:focus-visible {
       <span>Width</span>
       <input id="path-width" type="number" min="1" max="12" value="4">
     </label>
+  </div>
+  <div class="tool-actions">
+    <button id="tool-undo-btn" class="icon-btn" type="button" title="Undo last point (Ctrl+Z)" disabled>&#8630;</button>
+    <span class="tool-actions-spacer"></span>
+    <button id="tool-cancel-btn" class="icon-btn cancel" type="button" title="Cancel (Esc)">&#10005;</button>
+    <button id="tool-finish-btn" class="icon-btn confirm" type="button" title="Finish (Enter)">&#10003;</button>
   </div>
 </div>
 
@@ -1886,10 +1986,11 @@ button:focus-visible {
 
   <div id="files-panel" class="panel-scroll panel-tab-panel" role="tabpanel" aria-labelledby="files-tab-btn">
     <section class="panel-section">
-      <label class="field-label" for="file-name-input">File name</label>
-      <input id="file-name-input" class="wide-input" type="text" value="map-file">
+      <label class="field-label" for="file-name-input">Current file</label>
+      <input id="file-name-input" class="wide-input" type="text" value="Untitled">
       <div class="button-row compact-actions">
-        <button id="save-file-btn" class="btn primary" type="button">Save + Download</button>
+        <button id="new-file-btn" class="btn primary" type="button">New</button>
+        <button id="download-file-btn" class="btn" type="button">Download</button>
         <button id="open-computer-btn" class="btn" type="button">Open File</button>
         <input id="open-file-input" type="file" accept="application/json,.json" hidden>
       </div>
@@ -1931,9 +2032,13 @@ const ui = {
   elementTree: $('element-tree'),
   toolOptions: $('tool-options'),
   toolOptionsTitle: $('tool-options-title'),
+  toolFeatureName: $('tool-feature-name'),
   toolPointType: $('tool-point-type'),
   toolPointSize: $('tool-point-size'),
   toolPointColor: $('tool-point-color'),
+  toolUndoBtn: $('tool-undo-btn'),
+  toolCancelBtn: $('tool-cancel-btn'),
+  toolFinishBtn: $('tool-finish-btn'),
   featureMenu: $('feature-menu'),
   featureMenuTitle: $('feature-menu-title'),
   featureMenuFields: $('feature-menu-fields'),
@@ -1944,10 +2049,6 @@ const ui = {
   drawPointBtn: $('draw-point-btn'),
   drawPathBtn: $('draw-path-btn'),
   drawSegmentBtn: $('draw-segment-btn'),
-  finishPathBtn: $('finish-path-btn'),
-  undoPointBtn: $('undo-point-btn'),
-  clearActiveBtn: $('clear-active-btn'),
-  clearPathsBtn: $('clear-paths-btn'),
   pathColor: $('path-color'),
   pathWidth: $('path-width'),
   distanceUnits: $('distance-units'),
@@ -1967,7 +2068,8 @@ const ui = {
   fitElementsBtn: $('fit-elements-btn'),
   clearElementsBtn: $('clear-elements-btn'),
   fileNameInput: $('file-name-input'),
-  saveFileBtn: $('save-file-btn'),
+  newFileBtn: $('new-file-btn'),
+  downloadFileBtn: $('download-file-btn'),
   openComputerBtn: $('open-computer-btn'),
   openFileInput: $('open-file-input'),
   fileList: $('file-list'),
@@ -1999,11 +2101,15 @@ const SAMPLE_POINTS = [
 
 const STORAGE_KEYS = {
   panelCollapsed: 'mapPlotter.panelCollapsed',
-  basemap: 'mapPlotter.basemap',
-  view: 'mapPlotter.view',
+  files: 'mapPlotter.files',
+  currentFileId: 'mapPlotter.currentFileId',
+};
+
+const LEGACY_KEYS = {
   points: 'mapPlotter.points',
   paths: 'mapPlotter.paths',
-  files: 'mapPlotter.files',
+  view: 'mapPlotter.view',
+  basemap: 'mapPlotter.basemap',
   distanceUnits: 'mapPlotter.distanceUnits',
   showDistanceLabels: 'mapPlotter.showDistanceLabels',
 };
@@ -2031,6 +2137,11 @@ const state = {
   selected: null,
   dragEdit: null,
   files: [],
+  currentFileId: null,
+  suppressAutoSave: false,
+  undoStack: [],
+  redoStack: [],
+  clipboard: null,
   toastTimer: null,
 };
 
@@ -2040,12 +2151,8 @@ function init() {
   initMap();
   wireUi();
   restorePreferences();
-  restoreFileLibrary();
-  restoreSavedPoints();
-  restoreSavedPaths();
-  updateStats();
+  loadLibraryAndCurrentFile();
   updateDrawUi();
-  renderFileList();
 }
 
 function initMap() {
@@ -2077,7 +2184,7 @@ function initMap() {
   L.control.zoom({ position: 'bottomright' }).addTo(state.map);
   state.map.on('click', handleMapClick);
   state.map.on('contextmenu', hideFeatureMenu);
-  state.map.on('moveend', saveMapView);
+  state.map.on('moveend', () => autoSave());
 }
 
 function wireUi() {
@@ -2092,20 +2199,19 @@ function wireUi() {
   ui.drawPointBtn.addEventListener('click', () => toggleDrawMode('point'));
   ui.drawPathBtn.addEventListener('click', () => toggleDrawMode('path'));
   ui.drawSegmentBtn.addEventListener('click', () => toggleDrawMode('segment'));
-  ui.finishPathBtn.addEventListener('click', finishActivePath);
-  ui.undoPointBtn.addEventListener('click', undoActivePoint);
-  ui.clearActiveBtn.addEventListener('click', clearActivePath);
-  ui.clearPathsBtn.addEventListener('click', () => clearAllPaths());
+  ui.toolUndoBtn.addEventListener('click', undoActivePoint);
+  ui.toolCancelBtn.addEventListener('click', cancelDrawing);
+  ui.toolFinishBtn.addEventListener('click', confirmTool);
   ui.pathColor.addEventListener('input', refreshActivePathStyle);
   ui.pathWidth.addEventListener('input', refreshActivePathStyle);
   ui.distanceUnits.addEventListener('change', () => {
-    localStorage.setItem(STORAGE_KEYS.distanceUnits, ui.distanceUnits.value);
     updatePathDistanceDisplays();
     renderElementTree();
+    autoSave();
   });
   ui.showDistanceLabels.addEventListener('change', () => {
-    localStorage.setItem(STORAGE_KEYS.showDistanceLabels, String(ui.showDistanceLabels.checked));
     updatePathDistanceDisplays();
+    autoSave();
   });
 
   ui.plotBtn.addEventListener('click', plotPointsFromInput);
@@ -2117,7 +2223,9 @@ function wireUi() {
   ui.clearElementsBtn.addEventListener('click', () => clearAllElements());
   ui.elementTree.addEventListener('click', handleElementTreeClick);
   ui.elementTree.addEventListener('change', handleElementTreeChange);
-  ui.saveFileBtn.addEventListener('click', saveCurrentFile);
+  ui.newFileBtn.addEventListener('click', createNewFile);
+  ui.downloadFileBtn.addEventListener('click', downloadCurrentFile);
+  ui.fileNameInput.addEventListener('change', renameCurrentFile);
   ui.openComputerBtn.addEventListener('click', () => ui.openFileInput.click());
   ui.openFileInput.addEventListener('change', openComputerFile);
   ui.fileList.addEventListener('click', handleFileListClick);
@@ -2128,30 +2236,17 @@ function wireUi() {
   document.addEventListener('click', (event) => {
     if (!ui.featureMenu.hidden && !ui.featureMenu.contains(event.target)) hideFeatureMenu();
   });
+  document.addEventListener('keydown', handleKeydown);
 }
 
 function restorePreferences() {
   const panelCollapsed = localStorage.getItem(STORAGE_KEYS.panelCollapsed) === 'true';
   setPanelCollapsed(panelCollapsed);
-
-  const base = localStorage.getItem(STORAGE_KEYS.basemap);
-  if (base && state.baseLayers[base]) {
-    ui.basemapSelect.value = base;
-    changeBasemap();
-  }
-
-  const unit = localStorage.getItem(STORAGE_KEYS.distanceUnits);
-  if (unit && DISTANCE_UNITS[unit]) ui.distanceUnits.value = unit;
-  ui.showDistanceLabels.checked = localStorage.getItem(STORAGE_KEYS.showDistanceLabels) === 'true';
-
-  const view = readStoredJson(STORAGE_KEYS.view);
-  if (isValidView(view)) {
-    state.map.setView([Number(view.lat), Number(view.lng)], Number(view.zoom));
-  }
 }
 
 function setPanelCollapsed(collapsed) {
   ui.sidePanel.classList.toggle('collapsed', collapsed);
+  document.body.classList.toggle('panel-collapsed', collapsed);
   localStorage.setItem(STORAGE_KEYS.panelCollapsed, String(collapsed));
 }
 
@@ -2177,13 +2272,17 @@ function setPanelTab(tab) {
 }
 
 function changeBasemap() {
-  const next = state.baseLayers[ui.basemapSelect.value] || state.baseLayers.satellite;
+  applyBasemap(ui.basemapSelect.value);
+  autoSave();
+}
+
+function applyBasemap(name) {
+  const next = state.baseLayers[name] || state.baseLayers.satellite;
   if (next === state.activeBase) return;
   if (state.activeBase) state.map.removeLayer(state.activeBase);
   next.addTo(state.map);
   next.bringToBack();
   state.activeBase = next;
-  localStorage.setItem(STORAGE_KEYS.basemap, ui.basemapSelect.value);
 }
 
 function locateUser() {
@@ -2217,7 +2316,6 @@ function locateUser() {
 
 function plotPointsFromInput() {
   const defaults = currentPointDefaults();
-
   const parsed = parsePointText(ui.pointInput.value, defaults);
 
   if (parsed.points.length === 0) {
@@ -2227,7 +2325,8 @@ function plotPointsFromInput() {
   }
 
   showErrors(parsed.errors);
-  if (ui.replaceExisting.checked) clearAllElements(false, false);
+  pushUndo();
+  if (ui.replaceExisting.checked) clearElementsInternal();
 
   if (ui.plotMode.value === 'path') {
     if (parsed.points.length < 2) {
@@ -2237,15 +2336,15 @@ function plotPointsFromInput() {
     const latlngs = parsed.points.map((point) => L.latLng(point.lat, point.lon));
     const path = addFinishedPath(latlngs, currentPathStyle());
     updateStats();
-    savePaths();
+    autoSave();
     fitLatLngs(latlngs);
     showToast('Plotted connected path: ' + formatDistance(path.distanceMeters) + '.');
     return;
   }
 
-  parsed.points.forEach(addPoint);
+  parsed.points.forEach((point) => addPoint(point));
   updateStats();
-  savePoints();
+  autoSave();
   fitLatLngs(parsed.points.map((point) => [point.lat, point.lon]));
   showToast('Plotted ' + parsed.points.length + ' point' + (parsed.points.length === 1 ? '.' : 's.'));
 }
@@ -2343,6 +2442,7 @@ function normalizeMarkerType(value) {
 
 function addPoint(point) {
   const record = {
+    name: (point.name && String(point.name).trim()) || nextPointName(),
     lat: point.lat,
     lon: point.lon,
     type: normalizeMarkerType(point.type) || 'circle',
@@ -2376,15 +2476,19 @@ function wirePointMarker(point) {
     showFeatureMenuForSelection(event.originalEvent);
   });
   point.marker.on('dragstart', () => {
-    if (!canEditMapFeatures()) point.marker.dragging.disable();
-    else hideFeatureMenu();
+    if (!canEditMapFeatures()) {
+      point.marker.dragging.disable();
+    } else {
+      hideFeatureMenu();
+      pushUndo();
+    }
   });
   point.marker.on('dragend', () => {
     const latlng = point.marker.getLatLng();
     point.lat = latlng.lat;
     point.lon = latlng.lng;
     updatePointTooltip(point);
-    savePoints();
+    autoSave();
     selectFeature({ kind: 'point', point }, false);
   });
 }
@@ -2396,7 +2500,8 @@ function updatePointMarker(point) {
 }
 
 function updatePointTooltip(point) {
-  const text = point.lat.toFixed(6) + ', ' + point.lon.toFixed(6) + '<br>' + point.type + ', ' + point.size + ' px';
+  const text = escapeHtml(point.name) + '<br>' + point.lat.toFixed(6) + ', ' + point.lon.toFixed(6) +
+    '<br>' + point.type + ', ' + point.size + ' px';
   const tooltip = point.marker.getTooltip();
   if (tooltip) tooltip.setContent(text);
   else point.marker.bindTooltip(text, { direction: 'top', opacity: 0.95 });
@@ -2418,13 +2523,18 @@ function makeMarkerIcon(type, size, color) {
 }
 
 function clearPoints(showMessage = true) {
+  if (state.pointRecords.length === 0) {
+    if (showMessage) showToast('No points to clear.');
+    return;
+  }
+  pushUndo();
   state.pointLayer.clearLayers();
   state.pointRecords = [];
   if (state.selected && state.selected.kind === 'point') state.selected = null;
   hideFeatureMenu();
   showErrors([]);
   updateStats();
-  savePoints();
+  autoSave();
   if (showMessage) showToast('Cleared points.');
 }
 
@@ -2435,30 +2545,23 @@ function loadSample() {
 
 function exportPoints() {
   if (state.pointRecords.length === 0) return;
-  const rows = ['lat,lon,type,size'];
+  const rows = ['name,lat,lon,type,size'];
   state.pointRecords.forEach((point) => {
-    rows.push([point.lat, point.lon, point.type, point.size].join(','));
+    rows.push([point.name, point.lat, point.lon, point.type, point.size].join(','));
   });
   downloadText('map_points.csv', rows.join('\n') + '\n', 'text/csv');
 }
 
 function toggleDrawMode(mode) {
   if (state.drawMode === mode) {
-    if (mode === 'point') state.drawMode = null;
-    else clearActivePath(false);
-    updateDrawUi();
+    cancelDrawing();
     return;
   }
 
-  if (mode === 'point') {
-    clearActivePath(false);
-    state.drawMode = 'point';
-    updateDrawUi();
-    return;
-  }
-
+  clearActivePath(false);
   state.drawMode = mode;
-  if (!state.activePath) createActivePath();
+  if (mode !== 'point') createActivePath();
+  resetToolName(mode);
   updateDrawUi();
 }
 
@@ -2476,7 +2579,9 @@ function handleMapClick(event) {
 
   if (state.drawMode === 'point') {
     const defaults = currentToolPointStyle();
-    addPoint({
+    pushUndo();
+    const record = addPoint({
+      name: (ui.toolFeatureName.value || '').trim() || nextPointName(),
       lat: event.latlng.lat,
       lon: event.latlng.lng,
       type: defaults.type,
@@ -2484,8 +2589,9 @@ function handleMapClick(event) {
       color: defaults.color,
     });
     updateStats();
-    savePoints();
-    showToast('Added point.');
+    autoSave();
+    resetToolName('point');
+    showToast('Added ' + record.name + '.');
     return;
   }
 
@@ -2498,13 +2604,14 @@ function handleMapClick(event) {
   state.activePath.vertices.push(vertex);
 
   if (state.drawMode === 'segment' && state.activePath.points.length >= 2) {
-    finishActivePath();
+    finishActivePath(true);
   } else {
     updateDrawUi();
   }
 }
 
-function finishActivePath() {
+// Enter / green check: commit the active path and immediately begin the next one.
+function finishActivePath(continueDrawing) {
   const active = state.activePath;
   if (!active || active.points.length < 2) {
     showToast('A path needs at least two points.');
@@ -2514,29 +2621,51 @@ function finishActivePath() {
 
   const points = active.points.map((point) => L.latLng(point.lat, point.lng));
   const style = currentPathStyle();
-  const finishedMode = state.drawMode;
-  const path = addFinishedPath(points, style);
+  const mode = state.drawMode;
+  const name = (ui.toolFeatureName.value || '').trim() || defaultPathName(points);
+  pushUndo();
+  const path = addFinishedPath(points, style, name);
   state.activeLayer.clearLayers();
   state.activePath = null;
-  if (finishedMode === 'segment') {
-    state.drawMode = 'segment';
+
+  if (continueDrawing && (mode === 'segment' || mode === 'path')) {
+    state.drawMode = mode;
     createActivePath();
+    resetToolName(mode);
   } else {
     state.drawMode = null;
   }
+
   updateStats();
-  savePaths();
+  autoSave();
   updateDrawUi();
-  showToast('Saved path: ' + formatDistance(path.distanceMeters) + '.');
+  showToast('Saved ' + path.name + ': ' + formatDistance(path.distanceMeters) + '.');
 }
 
-function addFinishedPath(points, style) {
+// Green check button behaviour depends on the active tool.
+function confirmTool() {
+  if (state.drawMode === 'point') {
+    state.drawMode = null;
+    updateDrawUi();
+    return;
+  }
+  finishActivePath(true);
+}
+
+// Esc / red X: drop the in-progress drawing and leave the tool.
+function cancelDrawing() {
+  clearActivePath(false);
+  state.drawMode = null;
+  updateDrawUi();
+}
+
+function addFinishedPath(points, style, name) {
   const pathStyle = normalizePathStyle(style);
   const line = L.polyline(points, pathStyle).addTo(state.pathLayer);
   const distanceMeters = totalDistance(points);
-  line.bindTooltip(formatDistance(distanceMeters), { sticky: true, opacity: 0.95 });
   const vertices = points.map((point) => L.circleMarker(point, { ...vertexStyle(pathStyle.color), radius: 3 }).addTo(state.pathLayer));
   const path = {
+    name: (name && String(name).trim()) || defaultPathName(points),
     points,
     line,
     vertices,
@@ -2595,6 +2724,7 @@ function wirePathVertex(path, vertex, pointIndex) {
 
 function startPathDrag(path, startLatLng) {
   hideFeatureMenu();
+  pushUndo();
   state.dragEdit = {
     kind: 'path',
     path,
@@ -2621,7 +2751,7 @@ function finishPathDrag() {
   state.map.dragging.enable();
   state.map.getContainer().classList.remove('is-editing');
   if (state.dragEdit && state.dragEdit.kind === 'path') {
-    savePaths();
+    autoSave();
     selectFeature({ kind: 'path', path: state.dragEdit.path }, false);
   }
   state.dragEdit = null;
@@ -2629,6 +2759,7 @@ function finishPathDrag() {
 
 function startPathPointDrag(path, pointIndex) {
   hideFeatureMenu();
+  pushUndo();
   state.dragEdit = { kind: 'path-point', path, pointIndex };
   state.map.dragging.disable();
   state.map.getContainer().classList.add('is-editing');
@@ -2648,7 +2779,7 @@ function finishPathPointDrag() {
   state.map.dragging.enable();
   state.map.getContainer().classList.remove('is-editing');
   if (state.dragEdit && state.dragEdit.kind === 'path-point') {
-    savePaths();
+    autoSave();
     selectFeature({
       kind: 'path-point',
       path: state.dragEdit.path,
@@ -2665,11 +2796,7 @@ function undoActivePoint() {
   if (vertex) state.activeLayer.removeLayer(vertex);
   active.points.pop();
   active.line.setLatLngs(active.points);
-  if (active.points.length === 0) {
-    clearActivePath(false);
-  } else {
-    updateDrawUi();
-  }
+  updateDrawUi();
 }
 
 function clearActivePath(showMessage = true) {
@@ -2680,27 +2807,31 @@ function clearActivePath(showMessage = true) {
   if (showMessage) showToast('Cleared active drawing.');
 }
 
-function clearAllPaths(showMessage = true) {
-  clearActivePath(false);
-  state.pathLayer.clearLayers();
-  state.drawnPaths = [];
-  if (state.selected && (state.selected.kind === 'path' || state.selected.kind === 'path-point')) state.selected = null;
-  hideFeatureMenu();
-  updateStats();
-  savePaths();
-  updateDrawUi();
-  if (showMessage) showToast('Cleared paths.');
-}
-
-function clearAllElements(confirmFirst = true, showMessage = true) {
+function clearAllElements(confirmFirst = true) {
   if (state.pointRecords.length === 0 && state.drawnPaths.length === 0 && !state.activePath) {
-    if (showMessage) showToast('Nothing to clear.');
+    showToast('Nothing to clear.');
     return;
   }
   if (confirmFirst && !confirm('Clear all points and paths?')) return;
-  clearPoints(false);
-  clearAllPaths(false);
-  if (showMessage) showToast('Cleared all elements.');
+  pushUndo();
+  clearElementsInternal();
+  updateStats();
+  autoSave();
+  showToast('Cleared all elements.');
+}
+
+// Wipes the live map layers/records without touching history or storage.
+function clearElementsInternal() {
+  state.activeLayer.clearLayers();
+  state.activePath = null;
+  state.drawMode = null;
+  state.pointLayer.clearLayers();
+  state.pointRecords = [];
+  state.pathLayer.clearLayers();
+  state.drawnPaths = [];
+  state.selected = null;
+  hideFeatureMenu();
+  showErrors([]);
 }
 
 function refreshActivePathStyle() {
@@ -2748,10 +2879,8 @@ function updateDrawUi() {
   ui.drawPointBtn.classList.toggle('active', state.drawMode === 'point');
   ui.drawPathBtn.classList.toggle('active', state.drawMode === 'path');
   ui.drawSegmentBtn.classList.toggle('active', state.drawMode === 'segment');
-  ui.finishPathBtn.disabled = activePoints < 2;
-  ui.undoPointBtn.disabled = activePoints === 0;
-  ui.clearActiveBtn.disabled = activePoints === 0;
-  ui.clearPathsBtn.disabled = state.drawnPaths.length === 0 && activePoints === 0;
+  ui.toolUndoBtn.disabled = activePoints === 0;
+  ui.toolFinishBtn.disabled = state.drawMode !== 'point' && activePoints < 2;
   state.map.getContainer().classList.toggle('is-drawing', Boolean(state.drawMode));
 
   if (state.drawMode === 'point') {
@@ -2831,8 +2960,8 @@ function scrollSelectedTreeItem() {
 function showFeatureMenuForSelection(originalEvent) {
   if (!state.selected) return;
   renderFeatureMenuFields();
-  const left = Math.min(originalEvent.clientX, window.innerWidth - 220);
-  const top = Math.min(originalEvent.clientY, window.innerHeight - 170);
+  const left = Math.min(originalEvent.clientX, window.innerWidth - 230);
+  const top = Math.min(originalEvent.clientY, window.innerHeight - 200);
   ui.featureMenu.style.left = Math.max(8, left) + 'px';
   ui.featureMenu.style.top = Math.max(8, top) + 'px';
   ui.featureMenu.hidden = false;
@@ -2845,18 +2974,23 @@ function renderFeatureMenuFields() {
   if (selected.kind === 'point') {
     ui.featureMenuTitle.textContent = 'Point';
     ui.featureMenuFields.innerHTML =
+      '<label class="full"><span>Name</span><input type="text" data-menu-field="name" value="' + escapeHtml(selected.point.name) + '"></label>' +
       '<label><span>Type</span><select data-menu-field="type">' + markerTypeOptions(selected.point.type) + '</select></label>' +
       '<label><span>Size</span><input type="number" min="4" max="48" data-menu-field="size" value="' + selected.point.size + '"></label>' +
-      '<label><span>Color</span><input type="color" data-menu-field="color" value="' + selected.point.color + '"></label>';
+      '<label class="full"><span>Color</span><input type="color" data-menu-field="color" value="' + selected.point.color + '"></label>';
     return;
   }
 
   if (selected.kind === 'path' || selected.kind === 'path-point') {
     const path = selected.path;
     ui.featureMenuTitle.textContent = selected.kind === 'path-point' ? 'Path Point' : (path.points.length === 2 ? 'Segment' : 'Path');
-    ui.featureMenuFields.innerHTML =
-      '<label><span>Color</span><input type="color" data-menu-field="color" value="' + path.color + '"></label>' +
+    let fields = '';
+    if (selected.kind !== 'path-point') {
+      fields += '<label class="full"><span>Name</span><input type="text" data-menu-field="name" value="' + escapeHtml(path.name) + '"></label>';
+    }
+    fields += '<label><span>Color</span><input type="color" data-menu-field="color" value="' + path.color + '"></label>' +
       '<label><span>Width</span><input type="number" min="1" max="12" data-menu-field="width" value="' + path.width + '"></label>';
+    ui.featureMenuFields.innerHTML = fields;
   }
 }
 
@@ -2917,10 +3051,32 @@ function updateToolOptionsUi() {
   ui.toolOptions.hidden = !hasTool;
   ui.toolOptions.classList.toggle('point-mode', state.drawMode === 'point');
   ui.toolOptions.classList.toggle('line-mode', state.drawMode === 'path' || state.drawMode === 'segment');
-  if (state.drawMode === 'point') ui.toolOptionsTitle.textContent = 'Point Style';
-  else if (state.drawMode === 'segment') ui.toolOptionsTitle.textContent = 'Segment Style';
-  else if (state.drawMode === 'path') ui.toolOptionsTitle.textContent = 'Path Style';
-  else ui.toolOptionsTitle.textContent = 'Tool Options';
+  if (state.drawMode === 'point') ui.toolOptionsTitle.textContent = 'New Point';
+  else if (state.drawMode === 'segment') ui.toolOptionsTitle.textContent = 'New Segment';
+  else if (state.drawMode === 'path') ui.toolOptionsTitle.textContent = 'New Path';
+  else ui.toolOptionsTitle.textContent = 'New Feature';
+}
+
+function resetToolName(mode) {
+  if (mode === 'point') ui.toolFeatureName.value = nextPointName();
+  else if (mode === 'segment') ui.toolFeatureName.value = nextSegmentName();
+  else if (mode === 'path') ui.toolFeatureName.value = nextPathName();
+}
+
+function nextPointName() {
+  return 'Point ' + (state.pointRecords.length + 1);
+}
+
+function nextSegmentName() {
+  return 'Segment ' + (state.drawnPaths.filter((path) => path.points.length === 2).length + 1);
+}
+
+function nextPathName() {
+  return 'Path ' + (state.drawnPaths.filter((path) => path.points.length > 2).length + 1);
+}
+
+function defaultPathName(points) {
+  return points.length === 2 ? nextSegmentName() : nextPathName();
 }
 
 function updatePathDistanceDisplays() {
@@ -2928,14 +3084,15 @@ function updatePathDistanceDisplays() {
 }
 
 function updatePathDistanceDisplay(path) {
-  const text = formatDistance(path.distanceMeters);
+  const distance = formatDistance(path.distanceMeters);
+  const text = escapeHtml(path.name) + ' · ' + distance;
   const tooltip = path.line.getTooltip();
   if (tooltip) tooltip.setContent(text);
   else path.line.bindTooltip(text, { sticky: true, opacity: 0.95 });
 
   if (ui.showDistanceLabels.checked) {
     updateSegmentDistanceLabels(path);
-    updateTotalDistanceLabel(path, text);
+    updateTotalDistanceLabel(path, distance);
   } else {
     removeDistanceLabels(path);
   }
@@ -3023,26 +3180,28 @@ function renderElementTree() {
     : '<div class="tree-empty">No plotted elements.</div>';
 }
 
+function prop(label, inner) {
+  return '<label class="prop"><span>' + label + '</span>' + inner + '</label>';
+}
+
 function renderPointFeature(point, index, selectedKey) {
   const key = 'point-' + index;
   const selected = selectedKey === key;
-  const lat = point.lat.toFixed(6);
-  const lon = point.lon.toFixed(6);
-  return '<details class="tree-item' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
+  return '<details class="tree-item point' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
     '<summary>' +
     '<span class="tree-toggle"></span>' +
-    '<span><span class="tree-title">Point ' + (index + 1) + '</span><span class="tree-meta">' + lat + ', ' + lon + '</span></span>' +
+    '<span class="tree-ico point"></span>' +
+    '<span class="tree-title">' + escapeHtml(point.name) + '</span>' +
     '<button class="tree-btn" type="button" data-action="focus-point" data-index="' + index + '">Go</button>' +
     '<button class="tree-btn danger" type="button" data-action="delete-point" data-index="' + index + '">Del</button>' +
     '</summary>' +
     '<div class="tree-body">' +
-    '<div class="tree-grid">' +
-    '<label><span>Lat</span><input type="number" step="0.000001" data-kind="point" data-field="lat" data-index="' + index + '" value="' + point.lat + '"></label>' +
-    '<label><span>Lon</span><input type="number" step="0.000001" data-kind="point" data-field="lon" data-index="' + index + '" value="' + point.lon + '"></label>' +
-    '<label><span>Type</span><select data-kind="point" data-field="type" data-index="' + index + '">' + markerTypeOptions(point.type) + '</select></label>' +
-    '<label><span>Size</span><input type="number" min="4" max="48" data-kind="point" data-field="size" data-index="' + index + '" value="' + point.size + '"></label>' +
-    '<label><span>Color</span><input type="color" data-kind="point" data-field="color" data-index="' + index + '" value="' + point.color + '"></label>' +
-    '</div>' +
+    prop('Name', '<input type="text" data-kind="point" data-field="name" data-index="' + index + '" value="' + escapeHtml(point.name) + '">') +
+    prop('Latitude', '<input type="number" step="0.000001" data-kind="point" data-field="lat" data-index="' + index + '" value="' + point.lat + '">') +
+    prop('Longitude', '<input type="number" step="0.000001" data-kind="point" data-field="lon" data-index="' + index + '" value="' + point.lon + '">') +
+    prop('Type', '<select data-kind="point" data-field="type" data-index="' + index + '">' + markerTypeOptions(point.type) + '</select>') +
+    prop('Size', '<input type="number" min="4" max="48" data-kind="point" data-field="size" data-index="' + index + '" value="' + point.size + '">') +
+    prop('Color', '<input type="color" data-kind="point" data-field="color" data-index="' + index + '" value="' + point.color + '">') +
     '</div>' +
     '</details>';
 }
@@ -3050,24 +3209,25 @@ function renderPointFeature(point, index, selectedKey) {
 function renderPathFeature(path, index, selectedKey) {
   const key = 'path-' + index;
   const selected = selectedKey === key || (selectedKey && selectedKey.startsWith(key + '-point-'));
-  const label = path.points.length === 2 ? 'Segment ' : 'Path ';
-  const meta = path.points.length + ' pts, ' + formatDistance(path.distanceMeters);
+  const isSegment = path.points.length === 2;
+  const meta = path.points.length + ' pts · ' + formatDistance(path.distanceMeters);
   const pointRows = path.points.map((point, pointIndex) => renderPathPointFeature(path, index, point, pointIndex, selectedKey)).join('');
-  return '<details class="tree-item' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
+  return '<details class="tree-item ' + (isSegment ? 'segment' : 'path') + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
     '<summary>' +
     '<span class="tree-toggle"></span>' +
-    '<span><span class="tree-title">' + label + (index + 1) + '</span><span class="tree-meta">' + escapeHtml(meta) + '</span></span>' +
+    '<span class="tree-ico ' + (isSegment ? 'segment' : 'path') + '"></span>' +
+    '<span class="tree-title">' + escapeHtml(path.name) + '</span>' +
+    '<span class="tree-meta">' + escapeHtml(meta) + '</span>' +
     '<button class="tree-btn" type="button" data-action="focus-path" data-index="' + index + '">Go</button>' +
     '<button class="tree-btn danger" type="button" data-action="delete-path" data-index="' + index + '">Del</button>' +
     '</summary>' +
     '<div class="tree-body">' +
-    '<div class="tree-grid">' +
-    '<label><span>Color</span><input type="color" data-kind="path" data-field="color" data-index="' + index + '" value="' + path.color + '"></label>' +
-    '<label><span>Width</span><input type="number" min="1" max="12" data-kind="path" data-field="width" data-index="' + index + '" value="' + path.width + '"></label>' +
+    prop('Name', '<input type="text" data-kind="path" data-field="name" data-index="' + index + '" value="' + escapeHtml(path.name) + '">') +
+    prop('Color', '<input type="color" data-kind="path" data-field="color" data-index="' + index + '" value="' + path.color + '">') +
+    prop('Width', '<input type="number" min="1" max="12" data-kind="path" data-field="width" data-index="' + index + '" value="' + path.width + '">') +
     '</div>' +
     '<div class="tree-subhead">Points</div>' +
-    '<div class="element-tree">' + pointRows + '</div>' +
-    '</div>' +
+    pointRows +
     '</details>';
 }
 
@@ -3078,15 +3238,14 @@ function renderPathPointFeature(path, pathIndex, point, pointIndex, selectedKey)
   return '<details class="tree-point' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
     '<summary>' +
     '<span class="tree-toggle"></span>' +
-    '<span><span class="tree-title">Point ' + (pointIndex + 1) + '</span><span class="tree-meta">' + point.lat.toFixed(6) + ', ' + point.lng.toFixed(6) + '</span></span>' +
+    '<span class="tree-ico vertex"></span>' +
+    '<span class="tree-title">Vertex ' + (pointIndex + 1) + '</span>' +
     '<button class="tree-btn" type="button" data-action="focus-path-point" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '">Go</button>' +
     (canDelete ? '<button class="tree-btn danger" type="button" data-action="delete-path-point" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '">Del</button>' : '') +
     '</summary>' +
     '<div class="tree-body">' +
-    '<div class="tree-grid">' +
-    '<label><span>Lat</span><input type="number" step="0.000001" data-kind="path-point" data-field="lat" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '" value="' + point.lat + '"></label>' +
-    '<label><span>Lon</span><input type="number" step="0.000001" data-kind="path-point" data-field="lng" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '" value="' + point.lng + '"></label>' +
-    '</div>' +
+    prop('Latitude', '<input type="number" step="0.000001" data-kind="path-point" data-field="lat" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '" value="' + point.lat + '">') +
+    prop('Longitude', '<input type="number" step="0.000001" data-kind="path-point" data-field="lng" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '" value="' + point.lng + '">') +
     '</div>' +
     '</details>';
 }
@@ -3141,8 +3300,14 @@ function handleElementTreeChange(event) {
   const index = Number(control.dataset.index);
   if (!kind || !field) return;
 
-  if (kind === 'point' && Number.isInteger(index)) updatePointField(index, field, control.value);
-  if (kind === 'path' && Number.isInteger(index)) updatePathField(index, field, control.value);
+  if (kind === 'point' && Number.isInteger(index)) {
+    updatePointField(index, field, control.value);
+    if (field === 'name') selectFeature({ kind: 'point', point: state.pointRecords[index] }, false);
+  }
+  if (kind === 'path' && Number.isInteger(index)) {
+    updatePathField(index, field, control.value);
+    if (field === 'name') selectFeature({ kind: 'path', path: state.drawnPaths[index] }, false);
+  }
   if (kind === 'path-point') {
     const pathIndex = Number(control.dataset.pathIndex);
     const pointIndex = Number(control.dataset.pointIndex);
@@ -3156,7 +3321,10 @@ function updatePointField(index, field, value) {
   const point = state.pointRecords[index];
   if (!point) return;
 
-  if (field === 'lat' || field === 'lon') {
+  if (field === 'name') {
+    const name = String(value).trim();
+    if (name) point.name = name;
+  } else if (field === 'lat' || field === 'lon') {
     const numeric = Number(value);
     const min = field === 'lat' ? -90 : -180;
     const max = field === 'lat' ? 90 : 180;
@@ -3175,14 +3343,17 @@ function updatePointField(index, field, value) {
   }
 
   updatePointMarker(point);
-  savePoints();
+  autoSave();
 }
 
 function updatePathField(index, field, value) {
   const path = state.drawnPaths[index];
   if (!path) return;
 
-  if (field === 'color') {
+  if (field === 'name') {
+    const name = String(value).trim();
+    if (name) path.name = name;
+  } else if (field === 'color') {
     path.color = sanitizeColor(value, path.color);
   } else if (field === 'width') {
     path.width = clampNumber(Number(value), 1, 12, path.width);
@@ -3192,7 +3363,7 @@ function updatePathField(index, field, value) {
   path.vertices.forEach((vertex) => vertex.setStyle(vertexStyle(path.color)));
   highlightSelectedFeature();
   updatePathDistanceDisplay(path);
-  savePaths();
+  autoSave();
 }
 
 function updatePathPointField(pathIndex, pointIndex, field, value) {
@@ -3214,7 +3385,7 @@ function updatePathPointField(pathIndex, pointIndex, field, value) {
     isLat ? path.points[pointIndex].lng : numeric
   );
   updatePathGeometry(path);
-  savePaths();
+  autoSave();
 }
 
 function updatePathGeometry(path) {
@@ -3258,18 +3429,20 @@ function focusPathPoint(pathIndex, pointIndex) {
 function deletePoint(index) {
   const point = state.pointRecords[index];
   if (!point) return;
+  pushUndo();
   state.pointLayer.removeLayer(point.marker);
   state.pointRecords.splice(index, 1);
   if (state.selected && state.selected.point === point) state.selected = null;
   hideFeatureMenu();
   updateStats();
-  savePoints();
+  autoSave();
   showToast('Deleted point.');
 }
 
 function deletePath(index) {
   const path = state.drawnPaths[index];
   if (!path) return;
+  pushUndo();
   state.pathLayer.removeLayer(path.line);
   path.vertices.forEach((vertex) => state.pathLayer.removeLayer(vertex));
   removeDistanceLabels(path);
@@ -3277,20 +3450,20 @@ function deletePath(index) {
   if (state.selected && state.selected.path === path) state.selected = null;
   hideFeatureMenu();
   updateStats();
-  savePaths();
-  updateDrawUi();
+  autoSave();
   showToast('Deleted path.');
 }
 
 function deletePathPoint(pathIndex, pointIndex) {
   const path = state.drawnPaths[pathIndex];
   if (!path || path.points.length <= 2 || !path.points[pointIndex]) return;
+  pushUndo();
   path.points.splice(pointIndex, 1);
   const vertex = path.vertices.splice(pointIndex, 1)[0];
   if (vertex) state.pathLayer.removeLayer(vertex);
   rebuildPathVertices(path);
   updatePathGeometry(path);
-  savePaths();
+  autoSave();
   state.selected = { kind: 'path', path };
   renderElementTree();
   showToast('Deleted path point.');
@@ -3366,59 +3539,288 @@ function totalLabelLatLng(points) {
   return points[points.length - 1];
 }
 
-function saveMapView() {
-  const center = state.map.getCenter();
-  writeStoredJson(STORAGE_KEYS.view, {
-    lat: roundCoord(center.lat),
-    lng: roundCoord(center.lng),
-    zoom: state.map.getZoom(),
-  });
+// --------- keyboard shortcuts ---------
+
+function handleKeydown(event) {
+  const editing = isEditableTarget(event.target);
+  const inToolName = event.target === ui.toolFeatureName;
+  const ctrl = event.ctrlKey || event.metaKey;
+
+  if (event.key === 'Escape') {
+    if (state.drawMode) {
+      cancelDrawing();
+      event.preventDefault();
+    } else if (!ui.featureMenu.hidden) {
+      hideFeatureMenu();
+    }
+    if (editing) event.target.blur();
+    return;
+  }
+
+  if (event.key === 'Enter' && state.drawMode && state.drawMode !== 'point' && (!editing || inToolName)) {
+    if (state.activePath && state.activePath.points.length >= 2) {
+      finishActivePath(true);
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (ctrl && !editing) {
+    const key = event.key.toLowerCase();
+    if (key === 'z' && !event.shiftKey) {
+      undo();
+      event.preventDefault();
+    } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+      redo();
+      event.preventDefault();
+    } else if (key === 'c') {
+      copySelected();
+    } else if (key === 'v') {
+      pasteClipboard();
+    }
+    return;
+  }
+
+  if (!editing && (event.key === 'Delete' || event.key === 'Backspace') && state.selected && !state.drawMode) {
+    deleteSelectedFeature();
+    event.preventDefault();
+  }
 }
 
-function savePoints() {
-  writeStoredJson(STORAGE_KEYS.points, state.pointRecords.map((point) => ({
+function isEditableTarget(target) {
+  if (!target) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
+// --------- undo / redo ---------
+
+function captureDoc() {
+  return {
+    points: state.pointRecords.map(serializePoint),
+    paths: state.drawnPaths.map(serializePath),
+  };
+}
+
+function pushUndo() {
+  if (state.suppressAutoSave) return;
+  state.undoStack.push(captureDoc());
+  if (state.undoStack.length > 80) state.undoStack.shift();
+  state.redoStack = [];
+}
+
+function restoreDoc(doc) {
+  state.suppressAutoSave = true;
+  clearElementsInternal();
+  (doc.points || []).forEach((point) => addPoint(point));
+  (doc.paths || []).forEach((path) => {
+    const restored = normalizeStoredPath(path);
+    if (restored) addFinishedPath(restored.points, restored.style, path.name);
+  });
+  state.suppressAutoSave = false;
+  updateStats();
+  updateDrawUi();
+  autoSave();
+}
+
+function undo() {
+  if (state.activePath && state.activePath.points.length > 0) {
+    undoActivePoint();
+    return;
+  }
+  if (state.undoStack.length === 0) {
+    showToast('Nothing to undo.');
+    return;
+  }
+  state.redoStack.push(captureDoc());
+  restoreDoc(state.undoStack.pop());
+  showToast('Undo.');
+}
+
+function redo() {
+  if (state.redoStack.length === 0) {
+    showToast('Nothing to redo.');
+    return;
+  }
+  state.undoStack.push(captureDoc());
+  restoreDoc(state.redoStack.pop());
+  showToast('Redo.');
+}
+
+// --------- copy / paste ---------
+
+function copySelected() {
+  if (!state.selected) return;
+  if (state.selected.kind === 'point') {
+    state.clipboard = { kind: 'point', data: serializePoint(state.selected.point) };
+    showToast('Copied point.');
+  } else if (state.selected.kind === 'path' || state.selected.kind === 'path-point') {
+    state.clipboard = { kind: 'path', data: serializePath(state.selected.path) };
+    showToast('Copied path.');
+  }
+}
+
+function pasteClipboard() {
+  if (!state.clipboard) return;
+  pushUndo();
+  const offset = pasteOffset();
+
+  if (state.clipboard.kind === 'point') {
+    const src = state.clipboard.data;
+    const record = addPoint({
+      name: src.name + ' copy',
+      lat: clampNumber(src.lat + offset.lat, -90, 90, src.lat),
+      lon: clampNumber(src.lon + offset.lng, -180, 180, src.lon),
+      type: src.type,
+      size: src.size,
+      color: src.color,
+    });
+    updateStats();
+    autoSave();
+    selectFeature({ kind: 'point', point: record }, true);
+    showToast('Pasted ' + record.name + '.');
+    return;
+  }
+
+  const src = state.clipboard.data;
+  const points = src.points.map((point) => L.latLng(
+    clampNumber(point.lat + offset.lat, -90, 90, point.lat),
+    clampNumber(point.lng + offset.lng, -180, 180, point.lng)
+  ));
+  if (points.length < 2) return;
+  const path = addFinishedPath(points, { color: src.color, width: src.width }, src.name + ' copy');
+  updateStats();
+  autoSave();
+  selectFeature({ kind: 'path', path }, true);
+  showToast('Pasted ' + path.name + '.');
+}
+
+function pasteOffset() {
+  const zoom = state.map.getZoom();
+  const delta = 24 / Math.pow(2, zoom);
+  return { lat: -delta, lng: delta };
+}
+
+// --------- files: the single source of truth ---------
+
+function serializePoint(point) {
+  return {
+    name: point.name,
     lat: point.lat,
     lon: point.lon,
     type: point.type,
     size: point.size,
     color: point.color,
-  })));
+  };
 }
 
-function savePaths() {
-  writeStoredJson(STORAGE_KEYS.paths, state.drawnPaths.map((path) => ({
+function serializePath(path) {
+  return {
+    name: path.name,
     points: path.points.map((point) => ({ lat: point.lat, lng: point.lng })),
     color: path.color,
     width: path.width,
-  })));
+  };
 }
 
-function restoreFileLibrary() {
-  const files = readStoredJson(STORAGE_KEYS.files);
-  state.files = Array.isArray(files) ? files.filter(isValidSnapshot).map(normalizeSnapshotSummary) : [];
+function loadLibraryAndCurrentFile() {
+  const stored = readStoredJson(STORAGE_KEYS.files);
+  state.files = Array.isArray(stored)
+    ? stored.map((file) => normalizeFile(file, file && file.name)).filter(Boolean)
+    : [];
+
+  if (state.files.length === 0) {
+    const migrated = migrateLegacy();
+    if (migrated) state.files = [migrated];
+  }
+  if (state.files.length === 0) {
+    state.files = [blankFile('Untitled')];
+  }
+
+  const storedId = localStorage.getItem(STORAGE_KEYS.currentFileId);
+  const current = state.files.find((file) => file.id === storedId) || state.files[0];
+  applyFile(current);
+  persistLibrary();
 }
 
-function saveFileLibrary() {
-  writeStoredJson(STORAGE_KEYS.files, state.files);
+function migrateLegacy() {
+  const points = readStoredJson(LEGACY_KEYS.points);
+  const paths = readStoredJson(LEGACY_KEYS.paths);
+  if (!Array.isArray(points) && !Array.isArray(paths)) return null;
+
+  const file = blankFile('Recovered map');
+  file.view = readStoredJson(LEGACY_KEYS.view) || file.view;
+  const basemap = localStorage.getItem(LEGACY_KEYS.basemap);
+  if (basemap && state.baseLayers[basemap]) file.basemap = basemap;
+  const units = localStorage.getItem(LEGACY_KEYS.distanceUnits);
+  if (units && DISTANCE_UNITS[units]) file.distanceUnits = units;
+  file.showDistanceLabels = localStorage.getItem(LEGACY_KEYS.showDistanceLabels) === 'true';
+  const normalized = normalizeFile({ ...file, points: points || [], paths: paths || [] }, file.name);
+
+  Object.values(LEGACY_KEYS).forEach((key) => localStorage.removeItem(key));
+  return normalized;
+}
+
+function blankFile(name) {
+  const center = state.map ? state.map.getCenter() : { lat: 39.5, lng: -98.35 };
+  const zoom = state.map ? state.map.getZoom() : 4;
+  return {
+    version: 2,
+    id: generateId(),
+    name: (name || 'Untitled').trim() || 'Untitled',
+    savedAt: new Date().toISOString(),
+    view: { lat: roundCoord(center.lat), lng: roundCoord(center.lng), zoom },
+    basemap: ui.basemapSelect ? ui.basemapSelect.value : 'satellite',
+    distanceUnits: ui.distanceUnits ? ui.distanceUnits.value : 'meters',
+    showDistanceLabels: false,
+    points: [],
+    paths: [],
+  };
+}
+
+function generateId() {
+  return 'map-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36);
+}
+
+function applyFile(file) {
+  state.suppressAutoSave = true;
+  clearElementsInternal();
+
+  applyBasemap(file.basemap);
+  if (ui.basemapSelect) ui.basemapSelect.value = file.basemap;
+  ui.distanceUnits.value = file.distanceUnits;
+  ui.showDistanceLabels.checked = Boolean(file.showDistanceLabels);
+
+  file.points.forEach((point) => addPoint(point));
+  file.paths.forEach((path) => {
+    const restored = normalizeStoredPath(path);
+    if (restored) addFinishedPath(restored.points, restored.style, path.name);
+  });
+
+  state.currentFileId = file.id;
+  ui.fileNameInput.value = file.name;
+  state.suppressAutoSave = false;
+  state.undoStack = [];
+  state.redoStack = [];
+
+  updateStats();
+  updateDrawUi();
+
+  if (isValidView(file.view)) {
+    state.map.setView([Number(file.view.lat), Number(file.view.lng)], Number(file.view.zoom));
+  } else if (file.points.length || file.paths.length) {
+    fitAllFeatures();
+  }
   renderFileList();
 }
 
-function saveCurrentFile() {
-  const name = cleanFileName(ui.fileNameInput.value || 'map-file');
-  const snapshot = createMapSnapshot(name);
-  state.files.unshift(snapshot);
-  state.files = state.files.slice(0, 30);
-  saveFileLibrary();
-  downloadText(name + '.json', JSON.stringify(snapshot, null, 2), 'application/json');
-  showToast('Saved ' + name + '.');
-}
-
-function createMapSnapshot(name) {
+function currentSnapshot() {
+  const existing = state.files.find((file) => file.id === state.currentFileId);
   const center = state.map.getCenter();
   return {
-    version: 1,
-    id: 'map-' + Date.now().toString(36),
-    name,
+    version: 2,
+    id: state.currentFileId,
+    name: existing ? existing.name : (ui.fileNameInput.value.trim() || 'Untitled'),
     savedAt: new Date().toISOString(),
     view: {
       lat: roundCoord(center.lat),
@@ -3428,19 +3830,70 @@ function createMapSnapshot(name) {
     basemap: ui.basemapSelect.value,
     distanceUnits: ui.distanceUnits.value,
     showDistanceLabels: ui.showDistanceLabels.checked,
-    points: state.pointRecords.map((point) => ({
-      lat: point.lat,
-      lon: point.lon,
-      type: point.type,
-      size: point.size,
-      color: point.color,
-    })),
-    paths: state.drawnPaths.map((path) => ({
-      points: path.points.map((point) => ({ lat: point.lat, lng: point.lng })),
-      color: path.color,
-      width: path.width,
-    })),
+    points: state.pointRecords.map(serializePoint),
+    paths: state.drawnPaths.map(serializePath),
   };
+}
+
+function autoSave() {
+  if (state.suppressAutoSave || !state.currentFileId) return;
+  const snapshot = currentSnapshot();
+  const index = state.files.findIndex((file) => file.id === state.currentFileId);
+  if (index >= 0) state.files[index] = snapshot;
+  else state.files.unshift(snapshot);
+  persistLibrary();
+}
+
+function persistLibrary() {
+  writeStoredJson(STORAGE_KEYS.files, state.files);
+  if (state.currentFileId) localStorage.setItem(STORAGE_KEYS.currentFileId, state.currentFileId);
+  renderFileList();
+}
+
+function createNewFile() {
+  const file = blankFile('Untitled ' + (state.files.length + 1));
+  state.files.unshift(file);
+  applyFile(file);
+  persistLibrary();
+  setPanelTab('files');
+  showToast('Started ' + file.name + '.');
+}
+
+function renameCurrentFile() {
+  const name = ui.fileNameInput.value.trim() || 'Untitled';
+  ui.fileNameInput.value = name;
+  const file = state.files.find((entry) => entry.id === state.currentFileId);
+  if (file) file.name = name;
+  autoSave();
+}
+
+function downloadCurrentFile() {
+  const snapshot = currentSnapshot();
+  downloadText(cleanFileName(snapshot.name) + '.json', JSON.stringify(snapshot, null, 2), 'application/json');
+}
+
+function openComputerFile() {
+  const file = ui.openFileInput.files && ui.openFileInput.files[0];
+  ui.openFileInput.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(String(reader.result || ''));
+      const normalized = normalizeFile(parsed, file.name.replace(/\.json$/i, ''));
+      if (!normalized) throw new Error('Not a map file');
+      normalized.id = generateId();
+      state.files.unshift(normalized);
+      applyFile(normalized);
+      persistLibrary();
+      showToast('Opened ' + normalized.name + '.');
+    } catch (err) {
+      showToast(err.message || 'Could not open file.');
+    }
+  };
+  reader.onerror = () => showToast('Could not read file.');
+  reader.readAsText(file);
 }
 
 function renderFileList() {
@@ -3450,9 +3903,10 @@ function renderFileList() {
     return;
   }
   ui.fileList.innerHTML = state.files.map((file, index) => {
-    const meta = (file.points ? file.points.length : 0) + ' pts, ' + (file.paths ? file.paths.length : 0) + ' paths';
-    return '<div class="file-item">' +
-      '<div><div class="file-name">' + escapeHtml(file.name || 'map-file') + '</div><div class="file-meta">' + escapeHtml(meta) + '</div></div>' +
+    const meta = (file.points ? file.points.length : 0) + ' pts · ' + (file.paths ? file.paths.length : 0) + ' paths';
+    const current = file.id === state.currentFileId;
+    return '<div class="file-item' + (current ? ' current' : '') + '">' +
+      '<div><div class="file-name">' + escapeHtml(file.name || 'Untitled') + (current ? ' •' : '') + '</div><div class="file-meta">' + escapeHtml(meta) + '</div></div>' +
       '<button class="tree-btn" type="button" data-action="open-file" data-index="' + index + '">Open</button>' +
       '<button class="tree-btn" type="button" data-action="download-file" data-index="' + index + '">Save</button>' +
       '<button class="tree-btn danger" type="button" data-action="delete-file" data-index="' + index + '">Del</button>' +
@@ -3468,117 +3922,67 @@ function handleFileListClick(event) {
   const file = state.files[index];
 
   if (button.dataset.action === 'open-file') {
-    applyMapSnapshot(file);
-  } else if (button.dataset.action === 'download-file') {
-    const name = cleanFileName(file.name || 'map-file');
-    downloadText(name + '.json', JSON.stringify(file, null, 2), 'application/json');
-  } else if (button.dataset.action === 'delete-file') {
-    state.files.splice(index, 1);
-    saveFileLibrary();
-    showToast('Deleted saved file.');
-  }
-}
-
-function openComputerFile() {
-  const file = ui.openFileInput.files && ui.openFileInput.files[0];
-  ui.openFileInput.value = '';
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(String(reader.result || ''));
-      if (!isValidSnapshot(parsed)) throw new Error('Not a map file');
-      const snapshot = normalizeImportedSnapshot(parsed, file.name.replace(/\.json$/i, ''));
-      state.files.unshift(snapshot);
-      state.files = state.files.slice(0, 30);
-      saveFileLibrary();
-      applyMapSnapshot(snapshot);
-    } catch (err) {
-      showToast(err.message || 'Could not open file.');
+    if (file.id === state.currentFileId) {
+      showToast(file.name + ' is already open.');
+      return;
     }
-  };
-  reader.onerror = () => showToast('Could not read file.');
-  reader.readAsText(file);
+    applyFile(normalizeFile(file, file.name));
+    persistLibrary();
+    showToast('Opened ' + file.name + '.');
+  } else if (button.dataset.action === 'download-file') {
+    downloadText(cleanFileName(file.name || 'map-file') + '.json', JSON.stringify(file, null, 2), 'application/json');
+  } else if (button.dataset.action === 'delete-file') {
+    deleteFile(index);
+  }
 }
 
-function applyMapSnapshot(snapshot) {
-  const file = normalizeImportedSnapshot(snapshot, snapshot.name || 'map-file');
-  clearAllElements(false, false);
-
-  if (file.basemap && state.baseLayers[file.basemap]) {
-    ui.basemapSelect.value = file.basemap;
-    changeBasemap();
+function deleteFile(index) {
+  const file = state.files[index];
+  if (!file) return;
+  if (!confirm('Delete "' + file.name + '"? This cannot be undone.')) return;
+  const wasCurrent = file.id === state.currentFileId;
+  state.files.splice(index, 1);
+  if (wasCurrent) {
+    if (state.files.length === 0) state.files.push(blankFile('Untitled'));
+    applyFile(state.files[0]);
   }
-  if (file.distanceUnits && DISTANCE_UNITS[file.distanceUnits]) {
-    ui.distanceUnits.value = file.distanceUnits;
-    localStorage.setItem(STORAGE_KEYS.distanceUnits, file.distanceUnits);
-  }
-  ui.showDistanceLabels.checked = Boolean(file.showDistanceLabels);
-  localStorage.setItem(STORAGE_KEYS.showDistanceLabels, String(ui.showDistanceLabels.checked));
+  persistLibrary();
+  showToast('Deleted file.');
+}
 
-  file.points.forEach((point) => addPoint(point));
-  file.paths.forEach((path) => {
+function normalizeFile(file, fallbackName) {
+  if (!file || typeof file !== 'object' || !Array.isArray(file.points) || !Array.isArray(file.paths)) return null;
+  const points = file.points.map(normalizeStoredPoint).filter(Boolean).map((point, index) => ({
+    ...point,
+    name: point.name || 'Point ' + (index + 1),
+  }));
+  let segCount = 0;
+  let pathCount = 0;
+  const paths = file.paths.map((path) => {
     const restored = normalizeStoredPath(path);
-    if (restored) addFinishedPath(restored.points, restored.style);
-  });
+    if (!restored) return null;
+    const isSegment = restored.points.length === 2;
+    const fallback = isSegment ? 'Segment ' + (++segCount) : 'Path ' + (++pathCount);
+    return {
+      name: (path.name && String(path.name).trim()) || fallback,
+      points: restored.points.map((point) => ({ lat: point.lat, lng: point.lng })),
+      color: restored.style.color,
+      width: restored.style.weight,
+    };
+  }).filter(Boolean);
 
-  updateStats();
-  savePoints();
-  savePaths();
-  if (isValidView(file.view)) {
-    state.map.setView([Number(file.view.lat), Number(file.view.lng)], Number(file.view.zoom));
-  } else {
-    fitAllFeatures();
-  }
-  showToast('Opened ' + (file.name || 'map-file') + '.');
-}
-
-function isValidSnapshot(file) {
-  return file && typeof file === 'object' && Array.isArray(file.points) && Array.isArray(file.paths);
-}
-
-function normalizeSnapshotSummary(file) {
-  return normalizeImportedSnapshot(file, file.name || 'map-file');
-}
-
-function normalizeImportedSnapshot(file, fallbackName) {
   return {
-    version: 1,
-    id: file.id || ('map-' + Date.now().toString(36)),
-    name: cleanFileName(file.name || fallbackName || 'map-file'),
+    version: 2,
+    id: file.id || generateId(),
+    name: (file.name && String(file.name).trim()) || (fallbackName && String(fallbackName).trim()) || 'Untitled',
     savedAt: file.savedAt || new Date().toISOString(),
     view: isValidView(file.view) ? file.view : null,
     basemap: state.baseLayers[file.basemap] ? file.basemap : 'satellite',
     distanceUnits: DISTANCE_UNITS[file.distanceUnits] ? file.distanceUnits : 'meters',
     showDistanceLabels: Boolean(file.showDistanceLabels),
-    points: file.points.map(normalizeStoredPoint).filter(Boolean),
-    paths: file.paths.filter((path) => normalizeStoredPath(path)).map((path) => ({
-      points: path.points,
-      color: sanitizeColor(path.color, '#1c7ed6'),
-      width: clampNumber(Number(path.width), 1, 12, 4),
-    })),
+    points,
+    paths,
   };
-}
-
-function restoreSavedPoints() {
-  const points = readStoredJson(STORAGE_KEYS.points);
-  if (!Array.isArray(points)) return;
-
-  points.forEach((point) => {
-    const restored = normalizeStoredPoint(point);
-    if (restored) addPoint(restored);
-  });
-}
-
-function restoreSavedPaths() {
-  const paths = readStoredJson(STORAGE_KEYS.paths);
-  if (!Array.isArray(paths)) return;
-
-  paths.forEach((path) => {
-    const restored = normalizeStoredPath(path);
-    if (restored) addFinishedPath(restored.points, restored.style);
-  });
 }
 
 function normalizeStoredPoint(point) {
@@ -3588,6 +3992,7 @@ function normalizeStoredPoint(point) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return {
+    name: point.name ? String(point.name).trim() : '',
     lat,
     lon,
     type: normalizeMarkerType(point.type) || 'circle',
