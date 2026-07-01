@@ -16,6 +16,8 @@ const ui = {
   clearPathsBtn: $('clear-paths-btn'),
   pathColor: $('path-color'),
   pathWidth: $('path-width'),
+  distanceUnits: $('distance-units'),
+  showDistanceLabels: $('show-distance-labels'),
   drawStatus: $('draw-status'),
   pointInput: $('point-input'),
   defaultType: $('default-type'),
@@ -53,6 +55,23 @@ const SAMPLE_POINTS = [
   '42.3628,-71.0700,triangle,16',
 ].join('\n');
 
+const STORAGE_KEYS = {
+  panelCollapsed: 'mapPlotter.panelCollapsed',
+  basemap: 'mapPlotter.basemap',
+  view: 'mapPlotter.view',
+  points: 'mapPlotter.points',
+  distanceUnits: 'mapPlotter.distanceUnits',
+  showDistanceLabels: 'mapPlotter.showDistanceLabels',
+};
+
+const DISTANCE_UNITS = {
+  meters: { short: 'm', factor: 1, decimals: (value) => value < 100 ? 1 : 0 },
+  kilometers: { short: 'km', factor: 0.001, decimals: (value) => value < 10 ? 3 : value < 100 ? 2 : 1 },
+  feet: { short: 'ft', factor: 3.280839895, decimals: (value) => value < 100 ? 1 : 0 },
+  miles: { short: 'mi', factor: 0.000621371192, decimals: (value) => value < 10 ? 3 : value < 100 ? 2 : 1 },
+  nauticalMiles: { short: 'nmi', factor: 0.000539956803, decimals: (value) => value < 10 ? 3 : value < 100 ? 2 : 1 },
+};
+
 const state = {
   map: null,
   baseLayers: {},
@@ -73,6 +92,7 @@ function init() {
   initMap();
   wireUi();
   restorePreferences();
+  restoreSavedPoints();
   updateStats();
   updateDrawUi();
 }
@@ -105,6 +125,7 @@ function initMap() {
   state.activeBase = state.baseLayers.satellite;
   L.control.zoom({ position: 'bottomright' }).addTo(state.map);
   state.map.on('click', handleMapClick);
+  state.map.on('moveend', saveMapView);
 }
 
 function wireUi() {
@@ -121,6 +142,14 @@ function wireUi() {
   ui.clearPathsBtn.addEventListener('click', clearAllPaths);
   ui.pathColor.addEventListener('input', refreshActivePathStyle);
   ui.pathWidth.addEventListener('input', refreshActivePathStyle);
+  ui.distanceUnits.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEYS.distanceUnits, ui.distanceUnits.value);
+    updatePathDistanceDisplays();
+  });
+  ui.showDistanceLabels.addEventListener('change', () => {
+    localStorage.setItem(STORAGE_KEYS.showDistanceLabels, String(ui.showDistanceLabels.checked));
+    updatePathDistanceDisplays();
+  });
 
   ui.plotBtn.addEventListener('click', plotPointsFromInput);
   ui.fitBtn.addEventListener('click', fitAllFeatures);
@@ -130,19 +159,28 @@ function wireUi() {
 }
 
 function restorePreferences() {
-  const panelCollapsed = localStorage.getItem('mapPlotter.panelCollapsed') === 'true';
+  const panelCollapsed = localStorage.getItem(STORAGE_KEYS.panelCollapsed) === 'true';
   setPanelCollapsed(panelCollapsed);
 
-  const base = localStorage.getItem('mapPlotter.basemap');
+  const base = localStorage.getItem(STORAGE_KEYS.basemap);
   if (base && state.baseLayers[base]) {
     ui.basemapSelect.value = base;
     changeBasemap();
+  }
+
+  const unit = localStorage.getItem(STORAGE_KEYS.distanceUnits);
+  if (unit && DISTANCE_UNITS[unit]) ui.distanceUnits.value = unit;
+  ui.showDistanceLabels.checked = localStorage.getItem(STORAGE_KEYS.showDistanceLabels) === 'true';
+
+  const view = readStoredJson(STORAGE_KEYS.view);
+  if (isValidView(view)) {
+    state.map.setView([Number(view.lat), Number(view.lng)], Number(view.zoom));
   }
 }
 
 function setPanelCollapsed(collapsed) {
   ui.sidePanel.classList.toggle('collapsed', collapsed);
-  localStorage.setItem('mapPlotter.panelCollapsed', String(collapsed));
+  localStorage.setItem(STORAGE_KEYS.panelCollapsed, String(collapsed));
 }
 
 function togglePanel() {
@@ -156,7 +194,7 @@ function changeBasemap() {
   next.addTo(state.map);
   next.bringToBack();
   state.activeBase = next;
-  localStorage.setItem('mapPlotter.basemap', ui.basemapSelect.value);
+  localStorage.setItem(STORAGE_KEYS.basemap, ui.basemapSelect.value);
 }
 
 function locateUser() {
@@ -207,6 +245,7 @@ function plotPointsFromInput() {
   showErrors(parsed.errors);
   parsed.points.forEach(addPoint);
   updateStats();
+  savePoints();
   fitLatLngs(parsed.points.map((point) => [point.lat, point.lon]));
   showToast('Plotted ' + parsed.points.length + ' point' + (parsed.points.length === 1 ? '.' : 's.'));
 }
@@ -319,6 +358,7 @@ function clearPoints(showMessage = true) {
   state.pointRecords = [];
   showErrors([]);
   updateStats();
+  savePoints();
   if (showMessage) showToast('Cleared points.');
 }
 
@@ -384,16 +424,25 @@ function finishActivePath() {
   const points = active.points.map((point) => L.latLng(point.lat, point.lng));
   const style = currentPathStyle();
   const line = L.polyline(points, style).addTo(state.pathLayer);
-  line.bindTooltip(formatDistance(totalDistance(points)), { sticky: true, opacity: 0.95 });
+  const distanceMeters = totalDistance(points);
+  line.bindTooltip(formatDistance(distanceMeters), { sticky: true, opacity: 0.95 });
   points.forEach((point) => L.circleMarker(point, { ...vertexStyle(), radius: 3 }).addTo(state.pathLayer));
 
-  state.drawnPaths.push({ points, line });
+  const finishedMode = state.drawMode;
+  const path = { points, line, distanceMeters, labelMarker: null };
+  state.drawnPaths.push(path);
+  updatePathDistanceDisplay(path);
   state.activeLayer.clearLayers();
   state.activePath = null;
-  state.drawMode = null;
+  if (finishedMode === 'segment') {
+    state.drawMode = 'segment';
+    createActivePath();
+  } else {
+    state.drawMode = null;
+  }
   updateStats();
   updateDrawUi();
-  showToast('Saved path: ' + formatDistance(totalDistance(points)) + '.');
+  showToast('Saved path: ' + formatDistance(distanceMeters) + '.');
 }
 
 function undoActivePoint() {
@@ -473,6 +522,41 @@ function updateDrawUi() {
   }
 }
 
+function updatePathDistanceDisplays() {
+  state.drawnPaths.forEach(updatePathDistanceDisplay);
+}
+
+function updatePathDistanceDisplay(path) {
+  const text = formatDistance(path.distanceMeters);
+  const tooltip = path.line.getTooltip();
+  if (tooltip) tooltip.setContent(text);
+  else path.line.bindTooltip(text, { sticky: true, opacity: 0.95 });
+
+  if (ui.showDistanceLabels.checked) {
+    const labelLatLng = distanceLabelLatLng(path.points, path.distanceMeters);
+    if (!labelLatLng) return;
+    const icon = L.divIcon({
+      className: 'distance-label-icon',
+      html: '<span class="distance-label">' + escapeHtml(text) + '</span>',
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+    if (path.labelMarker) {
+      path.labelMarker.setLatLng(labelLatLng);
+      path.labelMarker.setIcon(icon);
+    } else {
+      path.labelMarker = L.marker(labelLatLng, {
+        icon,
+        interactive: false,
+        keyboard: false,
+      }).addTo(state.pathLayer);
+    }
+  } else if (path.labelMarker) {
+    state.pathLayer.removeLayer(path.labelMarker);
+    path.labelMarker = null;
+  }
+}
+
 function fitAllFeatures() {
   const latlngs = [];
   state.pointRecords.forEach((point) => latlngs.push([point.lat, point.lon]));
@@ -504,8 +588,117 @@ function totalDistance(points) {
 }
 
 function formatDistance(meters) {
-  if (meters < 1000) return meters.toFixed(meters < 100 ? 1 : 0) + ' m';
-  return (meters / 1000).toFixed(meters < 10000 ? 2 : 1) + ' km';
+  const unit = DISTANCE_UNITS[ui.distanceUnits.value] || DISTANCE_UNITS.meters;
+  const value = meters * unit.factor;
+  const decimals = unit.decimals(value);
+  return value.toFixed(decimals) + ' ' + unit.short;
+}
+
+function distanceLabelLatLng(points, distanceMeters) {
+  if (!points.length) return null;
+  if (points.length === 1 || distanceMeters <= 0) return points[0];
+  const target = distanceMeters / 2;
+  let traveled = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const previous = points[i - 1];
+    const current = points[i];
+    const segment = previous.distanceTo(current);
+    if (traveled + segment >= target) {
+      const ratio = segment > 0 ? (target - traveled) / segment : 0;
+      return L.latLng(
+        previous.lat + (current.lat - previous.lat) * ratio,
+        previous.lng + (current.lng - previous.lng) * ratio
+      );
+    }
+    traveled += segment;
+  }
+  return points[points.length - 1];
+}
+
+function saveMapView() {
+  const center = state.map.getCenter();
+  writeStoredJson(STORAGE_KEYS.view, {
+    lat: roundCoord(center.lat),
+    lng: roundCoord(center.lng),
+    zoom: state.map.getZoom(),
+  });
+}
+
+function savePoints() {
+  writeStoredJson(STORAGE_KEYS.points, state.pointRecords.map((point) => ({
+    lat: point.lat,
+    lon: point.lon,
+    type: point.type,
+    size: point.size,
+    color: point.color,
+  })));
+}
+
+function restoreSavedPoints() {
+  const points = readStoredJson(STORAGE_KEYS.points);
+  if (!Array.isArray(points)) return;
+
+  points.forEach((point) => {
+    const restored = normalizeStoredPoint(point);
+    if (restored) addPoint(restored);
+  });
+}
+
+function normalizeStoredPoint(point) {
+  if (!point || typeof point !== 'object') return null;
+  const lat = Number(point.lat);
+  const lon = Number(point.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return {
+    lat,
+    lon,
+    type: normalizeMarkerType(point.type) || 'circle',
+    size: clampNumber(Number(point.size), 4, 48, 14),
+    color: sanitizeColor(point.color, '#ff6b35'),
+  };
+}
+
+function isValidView(view) {
+  return view
+    && Number.isFinite(Number(view.lat))
+    && Number.isFinite(Number(view.lng))
+    && Number.isFinite(Number(view.zoom))
+    && view.lat >= -90
+    && view.lat <= 90
+    && view.lng >= -180
+    && view.lng <= 180
+    && view.zoom >= 0
+    && view.zoom <= 22;
+}
+
+function readStoredJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_) {}
+}
+
+function roundCoord(value) {
+  return Math.round(value * 10000000) / 10000000;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char]);
 }
 
 function showErrors(errors) {

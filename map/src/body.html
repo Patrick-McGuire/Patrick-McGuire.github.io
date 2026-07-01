@@ -24,6 +24,20 @@
     <span>Width</span>
     <input id="path-width" type="number" min="1" max="12" value="4">
   </label>
+  <label class="compact-field" title="Distance units">
+    <span>Units</span>
+    <select id="distance-units">
+      <option value="meters" selected>m</option>
+      <option value="kilometers">km</option>
+      <option value="feet">ft</option>
+      <option value="miles">mi</option>
+      <option value="nauticalMiles">nmi</option>
+    </select>
+  </label>
+  <label class="compact-field check-compact" title="Show permanent distance labels">
+    <input id="show-distance-labels" type="checkbox">
+    <span>Labels</span>
+  </label>
 
   <span id="draw-status" class="status-chip">Ready</span>
 </div>

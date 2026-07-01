@@ -160,6 +160,23 @@ textarea {
   color: var(--text);
 }
 
+.compact-field select {
+  height: 24px;
+  min-width: 58px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #0d1014;
+  color: var(--text);
+}
+
+.compact-field.check-compact {
+  gap: 7px;
+}
+
+.compact-field.check-compact input {
+  margin: 0;
+}
+
 .status-chip {
   flex: 0 0 auto;
   display: inline-flex;
@@ -461,6 +478,28 @@ button:focus-visible {
   inset: 30%;
   border-radius: 50%;
   background: #fff;
+}
+
+.distance-label-icon {
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+}
+
+.distance-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 6px;
+  background: rgba(17, 20, 24, 0.88);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translate(-50%, -135%);
 }
 
 .toast {
