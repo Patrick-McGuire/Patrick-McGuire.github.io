@@ -744,13 +744,66 @@ button:focus-visible {
 .tree-point summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 28px;
   padding: 2px 6px;
   cursor: pointer;
   list-style: none;
   border-left: 2px solid transparent;
   border-radius: 3px;
+}
+
+.tree-grip {
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.tree-grip::before {
+  content: "\22ee";
+}
+
+.tree-grip:active {
+  cursor: grabbing;
+}
+
+.tree-spacer {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 8px;
+}
+
+.tree-name-input {
+  flex: 0 1 auto;
+  min-width: 2ch;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.tree-name-input:hover {
+  border-color: var(--border);
+}
+
+.tree-name-input:focus {
+  border-color: var(--accent);
+  background: #0d1014;
+  outline: none;
+}
+
+details.drop-before > summary {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+details.drop-after > summary {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 .tree-item > summary:hover,
@@ -839,7 +892,7 @@ button:focus-visible {
 }
 
 .tree-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -857,7 +910,9 @@ button:focus-visible {
 }
 
 .prop {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 6px;
 }
 
@@ -866,16 +921,17 @@ button:focus-visible {
 }
 
 .prop > span {
-  display: block;
-  margin-bottom: 3px;
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
 }
 
 .prop input,
 .prop select {
-  width: 100%;
-  height: 30px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 28px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0 6px;
@@ -884,6 +940,8 @@ button:focus-visible {
 }
 
 .prop input[type="color"] {
+  flex: 0 0 46px;
+  height: 26px;
   padding: 2px;
 }
 
@@ -921,13 +979,22 @@ button:focus-visible {
 
 .file-item {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto;
   gap: 4px;
   align-items: center;
   padding: 7px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: #0d1014;
+  cursor: pointer;
+}
+
+.file-item:hover {
+  background: #12171d;
+}
+
+.file-info {
+  min-width: 0;
 }
 
 .file-name {

@@ -1427,13 +1427,66 @@ button:focus-visible {
 .tree-point summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 28px;
   padding: 2px 6px;
   cursor: pointer;
   list-style: none;
   border-left: 2px solid transparent;
   border-radius: 3px;
+}
+
+.tree-grip {
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.tree-grip::before {
+  content: "\22ee";
+}
+
+.tree-grip:active {
+  cursor: grabbing;
+}
+
+.tree-spacer {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 8px;
+}
+
+.tree-name-input {
+  flex: 0 1 auto;
+  min-width: 2ch;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.tree-name-input:hover {
+  border-color: var(--border);
+}
+
+.tree-name-input:focus {
+  border-color: var(--accent);
+  background: #0d1014;
+  outline: none;
+}
+
+details.drop-before > summary {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+details.drop-after > summary {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 .tree-item > summary:hover,
@@ -1522,7 +1575,7 @@ button:focus-visible {
 }
 
 .tree-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1540,7 +1593,9 @@ button:focus-visible {
 }
 
 .prop {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 6px;
 }
 
@@ -1549,16 +1604,17 @@ button:focus-visible {
 }
 
 .prop > span {
-  display: block;
-  margin-bottom: 3px;
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
 }
 
 .prop input,
 .prop select {
-  width: 100%;
-  height: 30px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 28px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0 6px;
@@ -1567,6 +1623,8 @@ button:focus-visible {
 }
 
 .prop input[type="color"] {
+  flex: 0 0 46px;
+  height: 26px;
   padding: 2px;
 }
 
@@ -1604,13 +1662,22 @@ button:focus-visible {
 
 .file-item {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto;
   gap: 4px;
   align-items: center;
   padding: 7px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: #0d1014;
+  cursor: pointer;
+}
+
+.file-item:hover {
+  background: #12171d;
+}
+
+.file-info {
+  min-width: 0;
 }
 
 .file-name {
@@ -2142,6 +2209,7 @@ const state = {
   undoStack: [],
   redoStack: [],
   clipboard: null,
+  treeDrag: null,
   toastTimer: null,
 };
 
@@ -2223,12 +2291,22 @@ function wireUi() {
   ui.clearElementsBtn.addEventListener('click', () => clearAllElements());
   ui.elementTree.addEventListener('click', handleElementTreeClick);
   ui.elementTree.addEventListener('change', handleElementTreeChange);
+  ui.elementTree.addEventListener('input', handleNameInputAutosize);
+  ui.elementTree.addEventListener('keydown', handleNameInputKeydown);
+  ui.elementTree.addEventListener('dragstart', onTreeDragStart);
+  ui.elementTree.addEventListener('dragover', onTreeDragOver);
+  ui.elementTree.addEventListener('dragleave', onTreeDragLeave);
+  ui.elementTree.addEventListener('drop', onTreeDrop);
+  ui.elementTree.addEventListener('dragend', onTreeDragEnd);
   ui.newFileBtn.addEventListener('click', createNewFile);
   ui.downloadFileBtn.addEventListener('click', downloadCurrentFile);
   ui.fileNameInput.addEventListener('change', renameCurrentFile);
   ui.openComputerBtn.addEventListener('click', () => ui.openFileInput.click());
   ui.openFileInput.addEventListener('change', openComputerFile);
   ui.fileList.addEventListener('click', handleFileListClick);
+  ui.fileList.addEventListener('change', handleFileListChange);
+  ui.fileList.addEventListener('input', handleNameInputAutosize);
+  ui.fileList.addEventListener('keydown', handleNameInputKeydown);
   ui.featureMenu.addEventListener('click', (event) => event.stopPropagation());
   ui.featureMenu.addEventListener('change', handleFeatureMenuChange);
   ui.featureMenuTreeBtn.addEventListener('click', () => jumpSelectionToTree());
@@ -3181,7 +3259,12 @@ function renderElementTree() {
 }
 
 function prop(label, inner) {
-  return '<label class="prop"><span>' + label + '</span>' + inner + '</label>';
+  return '<label class="prop"><span>' + label + ':</span>' + inner + '</label>';
+}
+
+function nameInput(kind, index, name) {
+  return '<input class="tree-name-input" type="text" data-kind="' + kind + '" data-field="name" data-index="' + index +
+    '" value="' + escapeHtml(name) + '" size="' + Math.max(2, name.length) + '">';
 }
 
 function renderPointFeature(point, index, selectedKey) {
@@ -3189,14 +3272,15 @@ function renderPointFeature(point, index, selectedKey) {
   const selected = selectedKey === key;
   return '<details class="tree-item point' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
     '<summary>' +
+    '<span class="tree-grip" draggable="true" title="Drag to reorder"></span>' +
     '<span class="tree-toggle"></span>' +
     '<span class="tree-ico point"></span>' +
-    '<span class="tree-title">' + escapeHtml(point.name) + '</span>' +
+    nameInput('point', index, point.name) +
+    '<span class="tree-spacer"></span>' +
     '<button class="tree-btn" type="button" data-action="focus-point" data-index="' + index + '">Go</button>' +
     '<button class="tree-btn danger" type="button" data-action="delete-point" data-index="' + index + '">Del</button>' +
     '</summary>' +
     '<div class="tree-body">' +
-    prop('Name', '<input type="text" data-kind="point" data-field="name" data-index="' + index + '" value="' + escapeHtml(point.name) + '">') +
     prop('Latitude', '<input type="number" step="0.000001" data-kind="point" data-field="lat" data-index="' + index + '" value="' + point.lat + '">') +
     prop('Longitude', '<input type="number" step="0.000001" data-kind="point" data-field="lon" data-index="' + index + '" value="' + point.lon + '">') +
     prop('Type', '<select data-kind="point" data-field="type" data-index="' + index + '">' + markerTypeOptions(point.type) + '</select>') +
@@ -3214,15 +3298,16 @@ function renderPathFeature(path, index, selectedKey) {
   const pointRows = path.points.map((point, pointIndex) => renderPathPointFeature(path, index, point, pointIndex, selectedKey)).join('');
   return '<details class="tree-item ' + (isSegment ? 'segment' : 'path') + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
     '<summary>' +
+    '<span class="tree-grip" draggable="true" title="Drag to reorder"></span>' +
     '<span class="tree-toggle"></span>' +
     '<span class="tree-ico ' + (isSegment ? 'segment' : 'path') + '"></span>' +
-    '<span class="tree-title">' + escapeHtml(path.name) + '</span>' +
+    nameInput('path', index, path.name) +
     '<span class="tree-meta">' + escapeHtml(meta) + '</span>' +
+    '<span class="tree-spacer"></span>' +
     '<button class="tree-btn" type="button" data-action="focus-path" data-index="' + index + '">Go</button>' +
     '<button class="tree-btn danger" type="button" data-action="delete-path" data-index="' + index + '">Del</button>' +
     '</summary>' +
     '<div class="tree-body">' +
-    prop('Name', '<input type="text" data-kind="path" data-field="name" data-index="' + index + '" value="' + escapeHtml(path.name) + '">') +
     prop('Color', '<input type="color" data-kind="path" data-field="color" data-index="' + index + '" value="' + path.color + '">') +
     prop('Width', '<input type="number" min="1" max="12" data-kind="path" data-field="width" data-index="' + index + '" value="' + path.width + '">') +
     '</div>' +
@@ -3237,9 +3322,11 @@ function renderPathPointFeature(path, pathIndex, point, pointIndex, selectedKey)
   const canDelete = path.points.length > 2;
   return '<details class="tree-point' + (selected ? ' selected' : '') + '" data-tree-key="' + key + '"' + (selected ? ' open' : '') + '>' +
     '<summary>' +
+    '<span class="tree-grip" draggable="true" title="Drag to reorder"></span>' +
     '<span class="tree-toggle"></span>' +
     '<span class="tree-ico vertex"></span>' +
     '<span class="tree-title">Vertex ' + (pointIndex + 1) + '</span>' +
+    '<span class="tree-spacer"></span>' +
     '<button class="tree-btn" type="button" data-action="focus-path-point" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '">Go</button>' +
     (canDelete ? '<button class="tree-btn danger" type="button" data-action="delete-path-point" data-path-index="' + pathIndex + '" data-point-index="' + pointIndex + '">Del</button>' : '') +
     '</summary>' +
@@ -3257,6 +3344,11 @@ function markerTypeOptions(selectedType) {
 }
 
 function handleElementTreeClick(event) {
+  // Clicks on the inline name editor or drag grip must not toggle the row.
+  if (event.target.closest('.tree-name-input') || event.target.closest('.tree-grip')) {
+    event.preventDefault();
+    return;
+  }
   const button = event.target.closest('button[data-action]');
   if (!button) return;
   event.preventDefault();
@@ -3300,13 +3392,13 @@ function handleElementTreeChange(event) {
   const index = Number(control.dataset.index);
   if (!kind || !field) return;
 
+  // The name editor lives in the always-visible row, so a name change needs no
+  // re-render (which would collapse the tree); other field edits update in place too.
   if (kind === 'point' && Number.isInteger(index)) {
     updatePointField(index, field, control.value);
-    if (field === 'name') selectFeature({ kind: 'point', point: state.pointRecords[index] }, false);
   }
   if (kind === 'path' && Number.isInteger(index)) {
     updatePathField(index, field, control.value);
-    if (field === 'name') selectFeature({ kind: 'path', path: state.drawnPaths[index] }, false);
   }
   if (kind === 'path-point') {
     const pathIndex = Number(control.dataset.pathIndex);
@@ -3315,6 +3407,131 @@ function handleElementTreeChange(event) {
       updatePathPointField(pathIndex, pointIndex, field, control.value);
     }
   }
+}
+
+// Grow/shrink the inline name editors to match their contents.
+function handleNameInputAutosize(event) {
+  const input = event.target;
+  if (!input.classList || !input.classList.contains('tree-name-input')) return;
+  input.size = Math.max(2, input.value.length);
+}
+
+function handleNameInputKeydown(event) {
+  const input = event.target;
+  if (!input.classList || !input.classList.contains('tree-name-input')) return;
+  event.stopPropagation();
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    input.blur();
+  }
+}
+
+function parseTreeKey(key) {
+  let match = key.match(/^path-(\d+)-point-(\d+)$/);
+  if (match) return { group: 'vertex', pathIndex: Number(match[1]), index: Number(match[2]) };
+  match = key.match(/^path-(\d+)$/);
+  if (match) return { group: 'path', index: Number(match[1]) };
+  match = key.match(/^point-(\d+)$/);
+  if (match) return { group: 'point', index: Number(match[1]) };
+  return null;
+}
+
+function moveItem(list, from, to) {
+  if (from === to || from < 0 || from >= list.length) return;
+  const item = list.splice(from, 1)[0];
+  const target = from < to ? to - 1 : to;
+  list.splice(Math.max(0, Math.min(list.length, target)), 0, item);
+}
+
+function onTreeDragStart(event) {
+  const grip = event.target.closest('.tree-grip');
+  if (!grip) return;
+  const details = grip.closest('details[data-tree-key]');
+  if (!details) return;
+  state.treeDrag = parseTreeKey(details.dataset.treeKey);
+  if (!state.treeDrag) return;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', details.dataset.treeKey);
+}
+
+function sameDragGroup(drag, target) {
+  if (!drag || !target || drag.group !== target.group) return false;
+  if (drag.group === 'vertex') return drag.pathIndex === target.pathIndex;
+  return true;
+}
+
+function onTreeDragOver(event) {
+  if (!state.treeDrag) return;
+  const details = event.target.closest('details[data-tree-key]');
+  if (!details) return;
+  const target = parseTreeKey(details.dataset.treeKey);
+  if (!sameDragGroup(state.treeDrag, target)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  clearDropIndicators();
+  if (target.index === state.treeDrag.index && target.group === state.treeDrag.group &&
+    (target.group !== 'vertex' || target.pathIndex === state.treeDrag.pathIndex)) {
+    return;
+  }
+  const rect = details.getBoundingClientRect();
+  const before = event.clientY < rect.top + rect.height / 2;
+  details.classList.add(before ? 'drop-before' : 'drop-after');
+}
+
+function onTreeDragLeave(event) {
+  const details = event.target.closest('details[data-tree-key]');
+  if (details) details.classList.remove('drop-before', 'drop-after');
+}
+
+function onTreeDrop(event) {
+  if (!state.treeDrag) return;
+  const details = event.target.closest('details[data-tree-key]');
+  if (!details) return;
+  const target = parseTreeKey(details.dataset.treeKey);
+  if (!sameDragGroup(state.treeDrag, target)) return;
+  event.preventDefault();
+  const rect = details.getBoundingClientRect();
+  const before = event.clientY < rect.top + rect.height / 2;
+  performReorder(state.treeDrag, target, before);
+  clearDropIndicators();
+  state.treeDrag = null;
+}
+
+function onTreeDragEnd() {
+  clearDropIndicators();
+  state.treeDrag = null;
+}
+
+function clearDropIndicators() {
+  ui.elementTree.querySelectorAll('.drop-before, .drop-after').forEach((node) => {
+    node.classList.remove('drop-before', 'drop-after');
+  });
+}
+
+function performReorder(drag, target, insertBefore) {
+  const to = insertBefore ? target.index : target.index + 1;
+  pushUndo();
+
+  if (drag.group === 'vertex') {
+    const path = state.drawnPaths[drag.pathIndex];
+    if (!path) return;
+    moveItem(path.points, drag.index, to);
+    rebuildPathVertices(path);
+    updatePathGeometry(path);
+    state.selected = { kind: 'path', path };
+  } else if (drag.group === 'point') {
+    const selectedPoint = state.pointRecords[drag.index];
+    moveItem(state.pointRecords, drag.index, to);
+    if (selectedPoint) state.selected = { kind: 'point', point: selectedPoint };
+  } else if (drag.group === 'path') {
+    const selectedPath = state.drawnPaths[drag.index];
+    moveItem(state.drawnPaths, drag.index, to);
+    if (selectedPath) state.selected = { kind: 'path', path: selectedPath };
+  }
+
+  autoSave();
+  renderElementTree();
+  highlightSelectedFeature();
 }
 
 function updatePointField(index, field, value) {
@@ -3905,9 +4122,12 @@ function renderFileList() {
   ui.fileList.innerHTML = state.files.map((file, index) => {
     const meta = (file.points ? file.points.length : 0) + ' pts · ' + (file.paths ? file.paths.length : 0) + ' paths';
     const current = file.id === state.currentFileId;
-    return '<div class="file-item' + (current ? ' current' : '') + '">' +
-      '<div><div class="file-name">' + escapeHtml(file.name || 'Untitled') + (current ? ' •' : '') + '</div><div class="file-meta">' + escapeHtml(meta) + '</div></div>' +
-      '<button class="tree-btn" type="button" data-action="open-file" data-index="' + index + '">Open</button>' +
+    const name = file.name || 'Untitled';
+    return '<div class="file-item' + (current ? ' current' : '') + '" data-index="' + index + '" title="Open ' + escapeHtml(name) + '">' +
+      '<div class="file-info">' +
+      '<input class="tree-name-input file-name-edit" type="text" data-file-index="' + index + '" value="' + escapeHtml(name) + '" size="' + Math.max(2, name.length) + '">' +
+      '<div class="file-meta">' + escapeHtml(meta) + (current ? ' · open' : '') + '</div>' +
+      '</div>' +
       '<button class="tree-btn" type="button" data-action="download-file" data-index="' + index + '">Save</button>' +
       '<button class="tree-btn danger" type="button" data-action="delete-file" data-index="' + index + '">Del</button>' +
       '</div>';
@@ -3916,24 +4136,45 @@ function renderFileList() {
 
 function handleFileListClick(event) {
   const button = event.target.closest('button[data-action]');
-  if (!button) return;
-  const index = Number(button.dataset.index);
+  if (button) {
+    const index = Number(button.dataset.index);
+    if (!Number.isInteger(index) || !state.files[index]) return;
+    const file = state.files[index];
+    if (button.dataset.action === 'download-file') {
+      downloadText(cleanFileName(file.name || 'map-file') + '.json', JSON.stringify(file, null, 2), 'application/json');
+    } else if (button.dataset.action === 'delete-file') {
+      deleteFile(index);
+    }
+    return;
+  }
+
+  // Clicking the inline rename box should edit, not open.
+  if (event.target.closest('.file-name-edit')) return;
+
+  const item = event.target.closest('.file-item');
+  if (!item) return;
+  const index = Number(item.dataset.index);
   if (!Number.isInteger(index) || !state.files[index]) return;
   const file = state.files[index];
-
-  if (button.dataset.action === 'open-file') {
-    if (file.id === state.currentFileId) {
-      showToast(file.name + ' is already open.');
-      return;
-    }
-    applyFile(normalizeFile(file, file.name));
-    persistLibrary();
-    showToast('Opened ' + file.name + '.');
-  } else if (button.dataset.action === 'download-file') {
-    downloadText(cleanFileName(file.name || 'map-file') + '.json', JSON.stringify(file, null, 2), 'application/json');
-  } else if (button.dataset.action === 'delete-file') {
-    deleteFile(index);
+  if (file.id === state.currentFileId) {
+    showToast(file.name + ' is already open.');
+    return;
   }
+  applyFile(normalizeFile(file, file.name));
+  persistLibrary();
+  showToast('Opened ' + file.name + '.');
+}
+
+function handleFileListChange(event) {
+  const input = event.target;
+  if (!input.classList || !input.classList.contains('file-name-edit')) return;
+  const index = Number(input.dataset.fileIndex);
+  const file = state.files[index];
+  if (!file) return;
+  const name = input.value.trim() || 'Untitled';
+  file.name = name;
+  if (file.id === state.currentFileId) ui.fileNameInput.value = name;
+  persistLibrary();
 }
 
 function deleteFile(index) {
