@@ -6,8 +6,14 @@ const ui = {
   panelToggle: $('panel-toggle'),
   panelClose: $('panel-close'),
   sidePanel: $('side-panel'),
+  plotTabBtn: $('plot-tab-btn'),
+  elementsTabBtn: $('elements-tab-btn'),
+  plotPanel: $('plot-panel'),
+  elementsPanel: $('elements-panel'),
+  elementTree: $('element-tree'),
   basemapSelect: $('basemap-select'),
   locateBtn: $('locate-btn'),
+  drawPointBtn: $('draw-point-btn'),
   drawPathBtn: $('draw-path-btn'),
   drawSegmentBtn: $('draw-segment-btn'),
   finishPathBtn: $('finish-path-btn'),
@@ -29,6 +35,8 @@ const ui = {
   clearPointsBtn: $('clear-points-btn'),
   sampleBtn: $('sample-btn'),
   exportPointsBtn: $('export-points-btn'),
+  fitElementsBtn: $('fit-elements-btn'),
+  clearElementsBtn: $('clear-elements-btn'),
   pointCount: $('point-count'),
   pathCount: $('path-count'),
   errorBox: $('error-box'),
@@ -60,6 +68,7 @@ const STORAGE_KEYS = {
   basemap: 'mapPlotter.basemap',
   view: 'mapPlotter.view',
   points: 'mapPlotter.points',
+  paths: 'mapPlotter.paths',
   distanceUnits: 'mapPlotter.distanceUnits',
   showDistanceLabels: 'mapPlotter.showDistanceLabels',
 };
@@ -93,6 +102,7 @@ function init() {
   wireUi();
   restorePreferences();
   restoreSavedPoints();
+  restoreSavedPaths();
   updateStats();
   updateDrawUi();
 }
@@ -131,15 +141,18 @@ function initMap() {
 function wireUi() {
   ui.panelToggle.addEventListener('click', togglePanel);
   ui.panelClose.addEventListener('click', () => setPanelCollapsed(true));
+  ui.plotTabBtn.addEventListener('click', () => setPanelTab('plot'));
+  ui.elementsTabBtn.addEventListener('click', () => setPanelTab('elements'));
   ui.basemapSelect.addEventListener('change', changeBasemap);
   ui.locateBtn.addEventListener('click', locateUser);
 
+  ui.drawPointBtn.addEventListener('click', () => toggleDrawMode('point'));
   ui.drawPathBtn.addEventListener('click', () => toggleDrawMode('path'));
   ui.drawSegmentBtn.addEventListener('click', () => toggleDrawMode('segment'));
   ui.finishPathBtn.addEventListener('click', finishActivePath);
   ui.undoPointBtn.addEventListener('click', undoActivePoint);
   ui.clearActiveBtn.addEventListener('click', clearActivePath);
-  ui.clearPathsBtn.addEventListener('click', clearAllPaths);
+  ui.clearPathsBtn.addEventListener('click', () => clearAllPaths());
   ui.pathColor.addEventListener('input', refreshActivePathStyle);
   ui.pathWidth.addEventListener('input', refreshActivePathStyle);
   ui.distanceUnits.addEventListener('change', () => {
@@ -156,6 +169,10 @@ function wireUi() {
   ui.clearPointsBtn.addEventListener('click', clearPoints);
   ui.sampleBtn.addEventListener('click', loadSample);
   ui.exportPointsBtn.addEventListener('click', exportPoints);
+  ui.fitElementsBtn.addEventListener('click', fitAllFeatures);
+  ui.clearElementsBtn.addEventListener('click', clearAllElements);
+  ui.elementTree.addEventListener('click', handleElementTreeClick);
+  ui.elementTree.addEventListener('change', handleElementTreeChange);
 }
 
 function restorePreferences() {
@@ -185,6 +202,16 @@ function setPanelCollapsed(collapsed) {
 
 function togglePanel() {
   setPanelCollapsed(!ui.sidePanel.classList.contains('collapsed'));
+}
+
+function setPanelTab(tab) {
+  const showElements = tab === 'elements';
+  ui.plotTabBtn.classList.toggle('active', !showElements);
+  ui.elementsTabBtn.classList.toggle('active', showElements);
+  ui.plotTabBtn.setAttribute('aria-selected', String(!showElements));
+  ui.elementsTabBtn.setAttribute('aria-selected', String(showElements));
+  ui.plotPanel.classList.toggle('active', !showElements);
+  ui.elementsPanel.classList.toggle('active', showElements);
 }
 
 function changeBasemap() {
@@ -227,11 +254,7 @@ function locateUser() {
 }
 
 function plotPointsFromInput() {
-  const defaults = {
-    type: normalizeMarkerType(ui.defaultType.value) || 'circle',
-    size: clampNumber(Number(ui.defaultSize.value), 4, 48, 14),
-    color: sanitizeColor(ui.defaultColor.value, '#ff6b35'),
-  };
+  const defaults = currentPointDefaults();
 
   const parsed = parsePointText(ui.pointInput.value, defaults);
 
@@ -248,6 +271,14 @@ function plotPointsFromInput() {
   savePoints();
   fitLatLngs(parsed.points.map((point) => [point.lat, point.lon]));
   showToast('Plotted ' + parsed.points.length + ' point' + (parsed.points.length === 1 ? '.' : 's.'));
+}
+
+function currentPointDefaults() {
+  return {
+    type: normalizeMarkerType(ui.defaultType.value) || 'circle',
+    size: clampNumber(Number(ui.defaultSize.value), 4, 48, 14),
+    color: sanitizeColor(ui.defaultColor.value, '#ff6b35'),
+  };
 }
 
 function parsePointText(text, defaults) {
@@ -326,16 +357,36 @@ function normalizeMarkerType(value) {
 }
 
 function addPoint(point) {
+  const record = {
+    lat: point.lat,
+    lon: point.lon,
+    type: normalizeMarkerType(point.type) || 'circle',
+    size: clampNumber(Number(point.size), 4, 48, 14),
+    color: sanitizeColor(point.color, '#ff6b35'),
+    marker: null,
+  };
   const marker = L.marker([point.lat, point.lon], {
-    icon: makeMarkerIcon(point.type, point.size, point.color),
+    icon: makeMarkerIcon(record.type, record.size, record.color),
     keyboard: false,
   });
-  marker.bindTooltip(
-    point.lat.toFixed(6) + ', ' + point.lon.toFixed(6) + '<br>' + point.type + ', ' + point.size + ' px',
-    { direction: 'top', opacity: 0.95 }
-  );
+  record.marker = marker;
+  updatePointTooltip(record);
   marker.addTo(state.pointLayer);
-  state.pointRecords.push({ ...point, marker });
+  state.pointRecords.push(record);
+  return record;
+}
+
+function updatePointMarker(point) {
+  point.marker.setLatLng([point.lat, point.lon]);
+  point.marker.setIcon(makeMarkerIcon(point.type, point.size, point.color));
+  updatePointTooltip(point);
+}
+
+function updatePointTooltip(point) {
+  const text = point.lat.toFixed(6) + ', ' + point.lon.toFixed(6) + '<br>' + point.type + ', ' + point.size + ' px';
+  const tooltip = point.marker.getTooltip();
+  if (tooltip) tooltip.setContent(text);
+  else point.marker.bindTooltip(text, { direction: 'top', opacity: 0.95 });
 }
 
 function makeMarkerIcon(type, size, color) {
@@ -378,10 +429,19 @@ function exportPoints() {
 
 function toggleDrawMode(mode) {
   if (state.drawMode === mode) {
-    state.drawMode = null;
+    if (mode === 'point') state.drawMode = null;
+    else clearActivePath(false);
     updateDrawUi();
     return;
   }
+
+  if (mode === 'point') {
+    clearActivePath(false);
+    state.drawMode = 'point';
+    updateDrawUi();
+    return;
+  }
+
   state.drawMode = mode;
   if (!state.activePath) createActivePath();
   updateDrawUi();
@@ -398,6 +458,22 @@ function createActivePath() {
 
 function handleMapClick(event) {
   if (!state.drawMode) return;
+
+  if (state.drawMode === 'point') {
+    const defaults = currentPointDefaults();
+    addPoint({
+      lat: event.latlng.lat,
+      lon: event.latlng.lng,
+      type: defaults.type,
+      size: defaults.size,
+      color: defaults.color,
+    });
+    updateStats();
+    savePoints();
+    showToast('Added point.');
+    return;
+  }
+
   if (!state.activePath) createActivePath();
 
   const latlng = event.latlng;
@@ -423,15 +499,8 @@ function finishActivePath() {
 
   const points = active.points.map((point) => L.latLng(point.lat, point.lng));
   const style = currentPathStyle();
-  const line = L.polyline(points, style).addTo(state.pathLayer);
-  const distanceMeters = totalDistance(points);
-  line.bindTooltip(formatDistance(distanceMeters), { sticky: true, opacity: 0.95 });
-  points.forEach((point) => L.circleMarker(point, { ...vertexStyle(), radius: 3 }).addTo(state.pathLayer));
-
   const finishedMode = state.drawMode;
-  const path = { points, line, distanceMeters, labelMarker: null };
-  state.drawnPaths.push(path);
-  updatePathDistanceDisplay(path);
+  const path = addFinishedPath(points, style);
   state.activeLayer.clearLayers();
   state.activePath = null;
   if (finishedMode === 'segment') {
@@ -441,8 +510,29 @@ function finishActivePath() {
     state.drawMode = null;
   }
   updateStats();
+  savePaths();
   updateDrawUi();
-  showToast('Saved path: ' + formatDistance(distanceMeters) + '.');
+  showToast('Saved path: ' + formatDistance(path.distanceMeters) + '.');
+}
+
+function addFinishedPath(points, style) {
+  const pathStyle = normalizePathStyle(style);
+  const line = L.polyline(points, pathStyle).addTo(state.pathLayer);
+  const distanceMeters = totalDistance(points);
+  line.bindTooltip(formatDistance(distanceMeters), { sticky: true, opacity: 0.95 });
+  const vertices = points.map((point) => L.circleMarker(point, { ...vertexStyle(pathStyle.color), radius: 3 }).addTo(state.pathLayer));
+  const path = {
+    points,
+    line,
+    vertices,
+    distanceMeters,
+    labelMarker: null,
+    color: pathStyle.color,
+    width: pathStyle.weight,
+  };
+  state.drawnPaths.push(path);
+  updatePathDistanceDisplay(path);
+  return path;
 }
 
 function undoActivePoint() {
@@ -467,13 +557,25 @@ function clearActivePath(showMessage = true) {
   if (showMessage) showToast('Cleared active drawing.');
 }
 
-function clearAllPaths() {
+function clearAllPaths(showMessage = true) {
   clearActivePath(false);
   state.pathLayer.clearLayers();
   state.drawnPaths = [];
   updateStats();
+  savePaths();
   updateDrawUi();
-  showToast('Cleared paths.');
+  if (showMessage) showToast('Cleared paths.');
+}
+
+function clearAllElements() {
+  if (state.pointRecords.length === 0 && state.drawnPaths.length === 0 && !state.activePath) {
+    showToast('Nothing to clear.');
+    return;
+  }
+  if (!confirm('Clear all points and paths?')) return;
+  clearPoints(false);
+  clearAllPaths(false);
+  showToast('Cleared all elements.');
 }
 
 function refreshActivePathStyle() {
@@ -484,27 +586,38 @@ function refreshActivePathStyle() {
 }
 
 function currentPathStyle() {
-  return {
+  return normalizePathStyle({
     color: sanitizeColor(ui.pathColor.value, '#1c7ed6'),
     weight: clampNumber(Number(ui.pathWidth.value), 1, 12, 4),
+    opacity: 0.95,
+    lineCap: 'round',
+    lineJoin: 'round',
+  });
+}
+
+function normalizePathStyle(style) {
+  return {
+    color: sanitizeColor(style && style.color, '#1c7ed6'),
+    weight: clampNumber(Number(style && (style.weight ?? style.width)), 1, 12, 4),
     opacity: 0.95,
     lineCap: 'round',
     lineJoin: 'round',
   };
 }
 
-function vertexStyle() {
+function vertexStyle(color) {
   return {
     radius: 4,
     color: '#ffffff',
     weight: 2,
-    fillColor: sanitizeColor(ui.pathColor.value, '#1c7ed6'),
+    fillColor: sanitizeColor(color || ui.pathColor.value, '#1c7ed6'),
     fillOpacity: 0.95,
   };
 }
 
 function updateDrawUi() {
   const activePoints = state.activePath ? state.activePath.points.length : 0;
+  ui.drawPointBtn.classList.toggle('active', state.drawMode === 'point');
   ui.drawPathBtn.classList.toggle('active', state.drawMode === 'path');
   ui.drawSegmentBtn.classList.toggle('active', state.drawMode === 'segment');
   ui.finishPathBtn.disabled = activePoints < 2;
@@ -513,7 +626,9 @@ function updateDrawUi() {
   ui.clearPathsBtn.disabled = state.drawnPaths.length === 0 && activePoints === 0;
   state.map.getContainer().classList.toggle('is-drawing', Boolean(state.drawMode));
 
-  if (state.drawMode === 'segment') {
+  if (state.drawMode === 'point') {
+    ui.drawStatus.textContent = 'Point: click map';
+  } else if (state.drawMode === 'segment') {
     ui.drawStatus.textContent = 'Segment: ' + activePoints + '/2';
   } else if (state.drawMode === 'path') {
     ui.drawStatus.textContent = 'Path: ' + activePoints + ' pt' + (activePoints === 1 ? '' : 's');
@@ -555,6 +670,184 @@ function updatePathDistanceDisplay(path) {
     state.pathLayer.removeLayer(path.labelMarker);
     path.labelMarker = null;
   }
+}
+
+function renderElementTree() {
+  ui.elementTree.innerHTML = [
+    renderPointGroup(),
+    renderPathGroup(),
+  ].join('');
+}
+
+function renderPointGroup() {
+  if (state.pointRecords.length === 0) {
+    return '<details class="tree-group" open><summary>Points (0)</summary><div class="tree-empty">No points plotted.</div></details>';
+  }
+
+  const items = state.pointRecords.map((point, index) => {
+    const lat = point.lat.toFixed(6);
+    const lon = point.lon.toFixed(6);
+    return '<div class="tree-item">' +
+      '<div class="tree-item-head">' +
+      '<div><div class="tree-title">Point ' + (index + 1) + '</div><div class="tree-meta">' + lat + ', ' + lon + '</div></div>' +
+      '<button class="tree-btn" type="button" data-action="focus-point" data-index="' + index + '">Go</button>' +
+      '<button class="tree-btn danger" type="button" data-action="delete-point" data-index="' + index + '">Del</button>' +
+      '</div>' +
+      '<div class="tree-grid">' +
+      '<label><span>Lat</span><input type="number" step="0.000001" data-kind="point" data-field="lat" data-index="' + index + '" value="' + point.lat + '"></label>' +
+      '<label><span>Lon</span><input type="number" step="0.000001" data-kind="point" data-field="lon" data-index="' + index + '" value="' + point.lon + '"></label>' +
+      '<label><span>Type</span><select data-kind="point" data-field="type" data-index="' + index + '">' + markerTypeOptions(point.type) + '</select></label>' +
+      '<label><span>Size</span><input type="number" min="4" max="48" data-kind="point" data-field="size" data-index="' + index + '" value="' + point.size + '"></label>' +
+      '<label><span>Color</span><input type="color" data-kind="point" data-field="color" data-index="' + index + '" value="' + point.color + '"></label>' +
+      '</div>' +
+      '</div>';
+  }).join('');
+
+  return '<details class="tree-group" open><summary>Points (' + state.pointRecords.length + ')</summary><div class="tree-items">' + items + '</div></details>';
+}
+
+function renderPathGroup() {
+  if (state.drawnPaths.length === 0) {
+    return '<details class="tree-group" open><summary>Paths (0)</summary><div class="tree-empty">No paths or segments drawn.</div></details>';
+  }
+
+  const items = state.drawnPaths.map((path, index) => {
+    const label = path.points.length === 2 ? 'Segment ' : 'Path ';
+    const meta = path.points.length + ' pts, ' + formatDistance(path.distanceMeters);
+    return '<div class="tree-item">' +
+      '<div class="tree-item-head">' +
+      '<div><div class="tree-title">' + label + (index + 1) + '</div><div class="tree-meta">' + escapeHtml(meta) + '</div></div>' +
+      '<button class="tree-btn" type="button" data-action="focus-path" data-index="' + index + '">Go</button>' +
+      '<button class="tree-btn danger" type="button" data-action="delete-path" data-index="' + index + '">Del</button>' +
+      '</div>' +
+      '<div class="tree-grid">' +
+      '<label><span>Color</span><input type="color" data-kind="path" data-field="color" data-index="' + index + '" value="' + path.color + '"></label>' +
+      '<label><span>Width</span><input type="number" min="1" max="12" data-kind="path" data-field="width" data-index="' + index + '" value="' + path.width + '"></label>' +
+      '</div>' +
+      '</div>';
+  }).join('');
+
+  return '<details class="tree-group" open><summary>Paths (' + state.drawnPaths.length + ')</summary><div class="tree-items">' + items + '</div></details>';
+}
+
+function markerTypeOptions(selectedType) {
+  return Array.from(MARKER_TYPES).map((type) => {
+    return '<option value="' + type + '"' + (type === selectedType ? ' selected' : '') + '>' + capitalize(type) + '</option>';
+  }).join('');
+}
+
+function handleElementTreeClick(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  if (!Number.isInteger(index)) return;
+
+  switch (button.dataset.action) {
+    case 'focus-point':
+      focusPoint(index);
+      break;
+    case 'delete-point':
+      deletePoint(index);
+      break;
+    case 'focus-path':
+      focusPath(index);
+      break;
+    case 'delete-path':
+      deletePath(index);
+      break;
+  }
+}
+
+function handleElementTreeChange(event) {
+  const control = event.target;
+  const kind = control.dataset.kind;
+  const field = control.dataset.field;
+  const index = Number(control.dataset.index);
+  if (!kind || !field || !Number.isInteger(index)) return;
+
+  if (kind === 'point') updatePointField(index, field, control.value);
+  if (kind === 'path') updatePathField(index, field, control.value);
+}
+
+function updatePointField(index, field, value) {
+  const point = state.pointRecords[index];
+  if (!point) return;
+
+  if (field === 'lat' || field === 'lon') {
+    const numeric = Number(value);
+    const min = field === 'lat' ? -90 : -180;
+    const max = field === 'lat' ? 90 : 180;
+    if (!Number.isFinite(numeric) || numeric < min || numeric > max) {
+      showToast('Bad ' + field + ' value.');
+      renderElementTree();
+      return;
+    }
+    point[field] = numeric;
+  } else if (field === 'type') {
+    point.type = normalizeMarkerType(value) || point.type;
+  } else if (field === 'size') {
+    point.size = clampNumber(Number(value), 4, 48, point.size);
+  } else if (field === 'color') {
+    point.color = sanitizeColor(value, point.color);
+  }
+
+  updatePointMarker(point);
+  savePoints();
+  renderElementTree();
+}
+
+function updatePathField(index, field, value) {
+  const path = state.drawnPaths[index];
+  if (!path) return;
+
+  if (field === 'color') {
+    path.color = sanitizeColor(value, path.color);
+  } else if (field === 'width') {
+    path.width = clampNumber(Number(value), 1, 12, path.width);
+  }
+
+  path.line.setStyle({ color: path.color, weight: path.width });
+  path.vertices.forEach((vertex) => vertex.setStyle(vertexStyle(path.color)));
+  updatePathDistanceDisplay(path);
+  savePaths();
+  renderElementTree();
+}
+
+function focusPoint(index) {
+  const point = state.pointRecords[index];
+  if (!point) return;
+  state.map.setView([point.lat, point.lon], Math.max(state.map.getZoom(), 16));
+  point.marker.openTooltip();
+}
+
+function focusPath(index) {
+  const path = state.drawnPaths[index];
+  if (!path) return;
+  fitLatLngs(path.points);
+  path.line.openTooltip(distanceLabelLatLng(path.points, path.distanceMeters));
+}
+
+function deletePoint(index) {
+  const point = state.pointRecords[index];
+  if (!point) return;
+  state.pointLayer.removeLayer(point.marker);
+  state.pointRecords.splice(index, 1);
+  updateStats();
+  savePoints();
+  showToast('Deleted point.');
+}
+
+function deletePath(index) {
+  const path = state.drawnPaths[index];
+  if (!path) return;
+  state.pathLayer.removeLayer(path.line);
+  path.vertices.forEach((vertex) => state.pathLayer.removeLayer(vertex));
+  if (path.labelMarker) state.pathLayer.removeLayer(path.labelMarker);
+  state.drawnPaths.splice(index, 1);
+  updateStats();
+  savePaths();
+  updateDrawUi();
+  showToast('Deleted path.');
 }
 
 function fitAllFeatures() {
@@ -634,6 +927,14 @@ function savePoints() {
   })));
 }
 
+function savePaths() {
+  writeStoredJson(STORAGE_KEYS.paths, state.drawnPaths.map((path) => ({
+    points: path.points.map((point) => ({ lat: point.lat, lng: point.lng })),
+    color: path.color,
+    width: path.width,
+  })));
+}
+
 function restoreSavedPoints() {
   const points = readStoredJson(STORAGE_KEYS.points);
   if (!Array.isArray(points)) return;
@@ -641,6 +942,16 @@ function restoreSavedPoints() {
   points.forEach((point) => {
     const restored = normalizeStoredPoint(point);
     if (restored) addPoint(restored);
+  });
+}
+
+function restoreSavedPaths() {
+  const paths = readStoredJson(STORAGE_KEYS.paths);
+  if (!Array.isArray(paths)) return;
+
+  paths.forEach((path) => {
+    const restored = normalizeStoredPath(path);
+    if (restored) addFinishedPath(restored.points, restored.style);
   });
 }
 
@@ -656,6 +967,25 @@ function normalizeStoredPoint(point) {
     type: normalizeMarkerType(point.type) || 'circle',
     size: clampNumber(Number(point.size), 4, 48, 14),
     color: sanitizeColor(point.color, '#ff6b35'),
+  };
+}
+
+function normalizeStoredPath(path) {
+  if (!path || typeof path !== 'object' || !Array.isArray(path.points)) return null;
+  const points = path.points.map((point) => {
+    const lat = Number(point.lat);
+    const lng = Number(point.lng ?? point.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return L.latLng(lat, lng);
+  });
+  if (points.some((point) => !point) || points.length < 2) return null;
+  return {
+    points,
+    style: normalizePathStyle({
+      color: path.color,
+      width: path.width,
+    }),
   };
 }
 
@@ -701,6 +1031,11 @@ function escapeHtml(value) {
   })[char]);
 }
 
+function capitalize(value) {
+  const text = String(value || '');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function showErrors(errors) {
   ui.errorList.textContent = '';
   ui.errorBox.hidden = errors.length === 0;
@@ -720,6 +1055,7 @@ function updateStats() {
   ui.pointCount.textContent = String(state.pointRecords.length);
   ui.pathCount.textContent = String(state.drawnPaths.length);
   ui.exportPointsBtn.disabled = state.pointRecords.length === 0;
+  renderElementTree();
 }
 
 function showToast(message) {

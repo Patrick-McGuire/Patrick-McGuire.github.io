@@ -1,5 +1,5 @@
 <div id="topbar" role="toolbar" aria-label="Map tools">
-  <button id="panel-toggle" class="btn" type="button" title="Toggle point panel" aria-label="Toggle point panel">Menu</button>
+  <button id="panel-toggle" class="btn" type="button" title="Toggle tools panel" aria-label="Toggle tools panel">Menu</button>
   <div class="brand">Map</div>
   <select id="basemap-select" class="control" title="Base map" aria-label="Base map">
     <option value="satellite">Satellite</option>
@@ -9,6 +9,7 @@
 
   <span class="divider"></span>
 
+  <button id="draw-point-btn" class="btn" type="button" title="Drop standalone points">Point</button>
   <button id="draw-path-btn" class="btn" type="button" title="Draw a multi-point path">Path</button>
   <button id="draw-segment-btn" class="btn" type="button" title="Draw a two-point segment">Segment</button>
   <button id="finish-path-btn" class="btn" type="button" disabled>Finish</button>
@@ -44,11 +45,16 @@
 
 <aside id="side-panel" class="side-panel" aria-label="Bulk plotting panel">
   <div class="panel-head">
-    <h1>Plot Points</h1>
+    <h1>Map Tools</h1>
     <button id="panel-close" class="btn ghost" type="button" title="Close panel">Close</button>
   </div>
 
-  <div class="panel-scroll">
+  <div class="panel-tabs" role="tablist" aria-label="Side panel views">
+    <button id="plot-tab-btn" class="panel-tab active" type="button" role="tab" aria-selected="true" aria-controls="plot-panel">Plot</button>
+    <button id="elements-tab-btn" class="panel-tab" type="button" role="tab" aria-selected="false" aria-controls="elements-panel">Elements</button>
+  </div>
+
+  <div id="plot-panel" class="panel-scroll panel-tab-panel active" role="tabpanel" aria-labelledby="plot-tab-btn">
     <section class="panel-section">
       <label class="field-label" for="point-input">Points</label>
       <textarea id="point-input" spellcheck="false" placeholder="42.3601,-71.0589,circle,14&#10;42.3584,-71.0636,pin,18&#10;42.3550,-71.0550,square,12"></textarea>
@@ -107,6 +113,16 @@
         <div class="error-title">Skipped lines</div>
         <ul id="error-list"></ul>
       </div>
+    </section>
+  </div>
+
+  <div id="elements-panel" class="panel-scroll panel-tab-panel" role="tabpanel" aria-labelledby="elements-tab-btn">
+    <section class="panel-section">
+      <div class="button-row compact-actions">
+        <button id="fit-elements-btn" class="btn" type="button">Fit All</button>
+        <button id="clear-elements-btn" class="btn danger" type="button">Clear All</button>
+      </div>
+      <div id="element-tree" class="element-tree"></div>
     </section>
   </div>
 </aside>
