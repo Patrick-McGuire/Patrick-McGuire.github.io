@@ -1,0 +1,2666 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Underwater Acoustic Array Simulator</title>
+  <style>
+    :root {
+      --bg: #f3f5f4;
+      --ink: #1d2529;
+      --muted: #607078;
+      --panel: #ffffff;
+      --panel-2: #eef3f2;
+      --line: #cfd9d6;
+      --line-strong: #aebdb8;
+      --accent: #087b8f;
+      --accent-2: #b36b13;
+      --good: #178451;
+      --bad: #be3b2f;
+      --warn: #a87500;
+      --shadow: 0 18px 48px rgba(39, 55, 60, 0.12);
+      --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.72), rgba(243,245,244,0.96)),
+        repeating-linear-gradient(90deg, rgba(29,37,41,0.035) 0 1px, transparent 1px 56px),
+        var(--bg);
+      font-family: var(--sans);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      min-height: 30px;
+      padding: 5px 9px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 750;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+    }
+
+    button:hover,
+    button:focus-visible {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    button.primary {
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    button.warn {
+      color: #fff;
+      border-color: var(--warn);
+      background: var(--warn);
+    }
+
+    button.danger {
+      color: #fff;
+      border-color: var(--bad);
+      background: var(--bad);
+    }
+
+    button.active-tool {
+      color: #fff;
+      border-color: var(--good);
+      background: var(--good);
+    }
+
+    button.tab-button {
+      border-radius: 0;
+      border-width: 0 0 2px;
+      background: transparent;
+      color: var(--muted);
+      min-height: 38px;
+    }
+
+    button.tab-button.active {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 29px;
+      padding: 5px 7px;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      min-height: auto;
+      padding: 0;
+      accent-color: var(--accent);
+    }
+
+    input[type="range"] {
+      padding: 0;
+      accent-color: var(--accent);
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      min-height: 42px;
+      padding: 7px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: grid;
+      gap: 1px;
+      min-width: 280px;
+      flex: 1;
+    }
+
+    .brand strong {
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 10px;
+      width: min(1880px, calc(100vw - 14px));
+      margin: 0 auto;
+      padding: 8px 0 14px;
+    }
+
+    .field-area {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .graph-menu {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: end;
+      gap: 6px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .compact-label {
+      width: 118px;
+    }
+
+    .field-toolbar,
+    .field-footer,
+    .spectro-toolbar {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(88px, 1fr));
+      gap: 7px;
+      align-items: end;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .field-toolbar .wide {
+      grid-column: span 2;
+    }
+
+    .status-line {
+      align-self: center;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .canvas-shell,
+    .spectrogram-shell {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    #fieldCanvas {
+      display: block;
+      width: 100%;
+      height: min(72vh, 800px);
+      min-height: 520px;
+      background: #ffffff;
+      touch-action: none;
+    }
+
+    .marker-inspector,
+    .array-popover {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      z-index: 5;
+      width: min(390px, calc(100% - 24px));
+      max-height: calc(100% - 24px);
+      overflow: auto;
+      display: grid;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 16px 42px rgba(29, 37, 41, 0.18);
+      backdrop-filter: blur(8px);
+    }
+
+    .array-popover {
+      right: auto;
+      left: 12px;
+    }
+
+    .popover-head,
+    .popover-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .popover-actions {
+      justify-content: flex-end;
+    }
+
+    .inspector-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .field-footer {
+      grid-template-columns: 1.4fr 1fr 1fr;
+      min-height: 50px;
+    }
+
+    .readout {
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .colorbar {
+      display: grid;
+      gap: 6px;
+      align-self: stretch;
+    }
+
+    .colorbar-strip {
+      min-height: 14px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: linear-gradient(90deg, #12223c, #167bcd, #23b4a5, #f7d54d, #dc4437);
+    }
+
+    .colorbar-labels {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .side-panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+
+    .tab-panel {
+      display: none;
+      max-height: calc(100vh - 98px);
+      overflow: auto;
+      padding: 10px;
+    }
+
+    .tab-panel.active {
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel-section {
+      display: grid;
+      gap: 9px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-section:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    h2,
+    h3 {
+      margin: 0;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .form-grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .form-grid .span-2 {
+      grid-column: span 2;
+    }
+
+    .inline-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .item-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .item {
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .item-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-weight: 850;
+      font-size: 13px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: #fff;
+      background: var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .chip.receiver {
+      background: var(--accent-2);
+    }
+
+    .mini-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mini-actions button {
+      min-height: 28px;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .metrics-table th,
+    .metrics-table td {
+      padding: 6px 5px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .metrics-table th {
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .note a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(8, 123, 143, 0.35);
+    }
+
+    .equation {
+      padding: 10px;
+      color: #253035;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel-2);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .spectrogram-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .spectro-toolbar {
+      grid-template-columns: 1fr 1fr 1fr 1.3fr;
+      padding: 8px;
+    }
+
+    #spectrogramCanvas {
+      display: block;
+      width: 100%;
+      min-height: 230px;
+      background: #fff;
+    }
+
+    .empty-message {
+      padding: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1180px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .tab-panel {
+        max-height: none;
+      }
+
+      .field-toolbar {
+        grid-template-columns: repeat(3, minmax(88px, 1fr));
+      }
+
+      .graph-menu {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        position: relative;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+
+      .workspace {
+        width: min(100vw - 14px, 760px);
+        padding-top: 8px;
+      }
+
+      .field-toolbar,
+      .field-footer,
+      .spectro-toolbar,
+      .form-grid,
+      .form-grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .field-toolbar .wide,
+      .form-grid .span-2 {
+        grid-column: auto;
+      }
+
+      #fieldCanvas {
+        height: 520px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <strong>Underwater Acoustic Array Simulator</strong>
+      <span>2D slice of coherent 3D water propagation for compact directional source arrays</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="field-area" aria-label="Acoustic field">
+      <div class="graph-menu" aria-label="Plot editing tools">
+        <div class="tool-group">
+          <button type="button" id="addSourceBtn" class="primary">Place Source</button>
+          <button type="button" id="addReceiverBtn">Place Receiver</button>
+          <button type="button" id="arrayBuilderBtn">Linear Array</button>
+          <button type="button" id="duplicateSelectedBtn">Duplicate</button>
+          <button type="button" id="deleteSelectedBtn" class="danger">Delete</button>
+        </div>
+        <div class="tool-group">
+          <label class="compact-label">Zoom target
+            <select id="zoomTarget">
+              <option value="both" selected>Both axes</option>
+              <option value="range">Range only</option>
+              <option value="lateral">Lateral only</option>
+            </select>
+          </label>
+          <button type="button" id="zoomInBtn">Zoom In</button>
+          <button type="button" id="zoomOutBtn">Zoom Out</button>
+          <button type="button" id="zoomHomeBtn">Fit</button>
+        </div>
+        <div class="tool-group">
+          <button type="button" id="playBtn" class="warn">Play</button>
+          <button type="button" id="resetBtn">Reset</button>
+        </div>
+      </div>
+      <div class="field-toolbar">
+        <label>Field plot
+          <select id="plotType">
+            <option value="spl">SPL, dB re p_ref</option>
+            <option value="relative">Relative level, dB</option>
+            <option value="loss">Array transmission loss, dB</option>
+            <option value="phase">Phase at center frequency</option>
+            <option value="instant">Instantaneous pressure</option>
+          </select>
+        </label>
+        <label>Range axis
+          <select id="rangeScale">
+            <option value="log" selected>Log range</option>
+            <option value="linear">Linear range</option>
+          </select>
+        </label>
+        <label>Range min, m
+          <input id="rangeMin" type="number" min="0.05" step="0.05" value="1">
+        </label>
+        <label>Range max, m
+          <input id="rangeMax" type="number" min="1" max="100000" step="1" value="1000">
+        </label>
+        <label>Lateral half-width, m
+          <input id="lateralSpan" type="number" min="0.05" step="0.05" value="75">
+        </label>
+        <label>Quality
+          <select id="quality">
+            <option value="draft">Draft</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="fine">Fine</option>
+          </select>
+        </label>
+        <label>Color min
+          <input id="colorMin" type="number" step="1" value="40">
+        </label>
+        <label>Color max
+          <input id="colorMax" type="number" step="1" value="120">
+        </label>
+        <label class="inline-check">
+          <input id="autoScale" type="checkbox" checked>
+          Auto scale field
+        </label>
+        <label>Relative reference
+          <select id="relativeReference">
+            <option value="field">Current field maximum</option>
+            <option value="receiver">Receiver R1</option>
+            <option value="source">Strongest source at 1 m</option>
+          </select>
+        </label>
+        <label>Frequency samples
+          <input id="freqSamples" type="number" min="1" max="61" step="2" value="9">
+        </label>
+        <div class="status-line" id="renderStatus">Ready</div>
+      </div>
+
+      <div class="canvas-shell">
+        <canvas id="fieldCanvas" aria-label="Acoustic field heatmap"></canvas>
+        <div id="markerInspector" class="marker-inspector" hidden></div>
+        <div id="arrayPopover" class="array-popover" hidden>
+          <div class="popover-head">
+            <strong>Linear Array</strong>
+            <button type="button" id="closeArrayBtn">Close</button>
+          </div>
+          <div class="form-grid three">
+            <label>Count
+              <input id="arrayCount" type="number" min="1" max="10" step="1" value="3">
+            </label>
+            <label>Spacing, m
+              <input id="arraySpacing" type="number" min="0" step="0.001" value="0.0762">
+            </label>
+            <label>Heading, deg
+              <input id="arrayHeading" type="number" step="1" value="0">
+            </label>
+            <label>Center x, m
+              <input id="arrayX" type="number" step="0.001" value="0">
+            </label>
+            <label>Center y, m
+              <input id="arrayY" type="number" step="0.001" value="0">
+            </label>
+            <label>Level, dB re p_ref @ 1 m
+              <input id="arrayLevel" type="number" step="0.1" value="110.6">
+            </label>
+          </div>
+          <div class="popover-actions">
+            <button type="button" id="applyArrayBtn" class="primary">Apply</button>
+            <button type="button" id="cptPresetBtn">CPT Starter</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="field-footer">
+        <div class="readout" id="cursorReadout">Move over the plot to measure pressure and phase.</div>
+        <div class="colorbar" aria-label="Field color scale">
+          <div class="colorbar-strip" id="fieldColorbar"></div>
+          <div class="colorbar-labels"><span id="colorbarMin">40 dB</span><span id="colorbarMid">80 dB</span><span id="colorbarMax">120 dB</span></div>
+        </div>
+        <div class="readout" id="summaryReadout">3 sources, 3 receivers</div>
+      </div>
+
+      <section class="spectrogram-section" aria-label="Receiver spectrograms">
+        <div class="spectro-toolbar">
+          <label>Spectrogram receivers
+            <select id="spectroReceiverMode">
+              <option value="enabled" selected>All enabled receivers</option>
+              <option value="first3">First 3 receivers</option>
+              <option value="selected">Selected reference receiver</option>
+            </select>
+          </label>
+          <label>Dynamic range, dB
+            <input id="spectroRange" type="number" min="10" max="120" step="5" value="55">
+          </label>
+          <label>Time padding, s
+            <input id="spectroPadding" type="number" min="0" max="2" step="0.01" value="0.02">
+          </label>
+          <div class="status-line" id="spectroStatus">Spectrograms share one color scale.</div>
+        </div>
+        <div class="spectrogram-shell">
+          <canvas id="spectrogramCanvas" aria-label="Stacked receiver spectrograms"></canvas>
+        </div>
+      </section>
+    </section>
+
+    <aside class="side-panel" aria-label="Simulation controls">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-button active" data-tab="analysis">Analysis</button>
+        <button type="button" class="tab-button" data-tab="model">Model</button>
+      </div>
+
+      <section id="tab-analysis" class="tab-panel active">
+        <div class="panel-section">
+          <div class="section-head">
+            <h3>Signal</h3>
+          </div>
+          <div class="form-grid">
+            <label>Mode
+              <select id="signalMode">
+                <option value="chirp" selected>Linear chirp</option>
+                <option value="tone">Tone</option>
+              </select>
+            </label>
+            <label>Duration, s
+              <input id="duration" type="number" min="0.001" step="0.001" value="0.1">
+            </label>
+            <label>Start / tone frequency, Hz
+              <input id="freqStart" type="number" min="1" step="1" value="8500">
+            </label>
+            <label>End frequency, Hz
+              <input id="freqEnd" type="number" min="1" step="1" value="9500">
+            </label>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-head">
+            <h3>Water medium</h3>
+          </div>
+          <div class="form-grid">
+            <label>Sound speed, m/s
+              <input id="soundSpeed" type="number" min="100" step="1" value="1480">
+            </label>
+            <label>Density, kg/m3
+              <input id="density" type="number" min="1" step="1" value="1025">
+            </label>
+            <label class="span-2">Absorption model
+              <select id="absorptionModel">
+                <option value="thorp" selected>Thorp seawater approximation</option>
+                <option value="constant">Constant dB/km</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            <label>Constant absorption, dB/km
+              <input id="absorptionDbKm" type="number" min="0" step="0.01" value="1">
+            </label>
+            <label>Reference preset
+              <select id="referencePreset">
+                <option value="underwater" selected>Underwater, 1 uPa</option>
+                <option value="air">Air SPL, 20 uPa</option>
+                <option value="custom">Custom pressure</option>
+              </select>
+            </label>
+            <label>Pressure reference, Pa
+              <input id="pressureRef" type="number" min="0.000000001" step="0.000001" value="0.000001">
+            </label>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="section-head">
+            <h3>Receiver metrics</h3>
+          </div>
+          <table class="metrics-table" aria-label="Receiver measurement table">
+            <thead>
+              <tr>
+                <th>Point</th>
+                <th>SPL</th>
+                <th>Rel</th>
+                <th>Arrival</th>
+                <th>Intensity</th>
+              </tr>
+            </thead>
+            <tbody id="metricsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-model" class="tab-panel">
+        <div class="panel-section">
+          <h3>Physics core</h3>
+          <div class="equation">p(x,y,f) = sum_i P_i,rms(1m) * D_i(theta,f) * 10^(-A(f) r_i,km / 20) / r_i * exp(j(k r_i + phi_i))
+
+SPL = 20 log10(|p_rms| / p_ref)
+I = p_rms^2 / (rho c)
+
+Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
+          <p class="note">The field is a horizontal 2D slice of a 3D free-field solution. It uses spherical spreading, coherent phase addition, selectable directional source patterns, and optional absorption. Chirp SPL plots average pressure power across sampled frequencies. Boundaries, reflections, reverberation, nonlinear source behavior, electrical drive limits, and near-field transducer structure are not included.</p>
+        </div>
+
+        <div class="panel-section">
+          <h3>Absorption</h3>
+          <p class="note">The Thorp option estimates seawater absorption in dB/km as a function of frequency in kHz. Around 9 kHz it is about 1 dB/km, so geometric spreading usually dominates from 1 m to 1 km.</p>
+        </div>
+
+        <div class="panel-section">
+          <h3>CPT-2521C-500 starting point</h3>
+          <p class="note">DigiKey lists the part as a Same Sky piezo transducer, 25.60 mm diameter, 3.7 kHz, 95 dB at 20 V and 30 cm, IP68. The simulator includes that geometry as a first pattern preset. At 9 kHz in water a 25.6 mm piston is much smaller than one wavelength, so its directivity is broad. The published SPL is an air measurement and is not a water-source-level calibration.</p>
+          <p class="note"><a href="https://www.digikey.com/en/products/detail/same-sky-formerly-cui-devices/CPT-2521C-500/6012427" target="_blank" rel="noreferrer">DigiKey CPT-2521C-500 product page</a></p>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    "use strict";
+
+    const TAU = Math.PI * 2;
+    const DEG = Math.PI / 180;
+    const DEFAULT_PREF = 1e-6;
+    const STORAGE_KEY = "underwater-acoustic-array-sim-v2";
+
+    const ui = {};
+    [
+      "fieldCanvas", "spectrogramCanvas", "plotType", "rangeScale", "rangeMin", "rangeMax",
+      "lateralSpan", "quality", "colorMin", "colorMax", "autoScale", "relativeReference",
+      "freqSamples", "renderStatus", "cursorReadout", "summaryReadout", "fieldColorbar",
+      "colorbarMin", "colorbarMid", "colorbarMax", "signalMode", "duration", "freqStart",
+      "freqEnd", "soundSpeed", "density", "absorptionModel", "absorptionDbKm", "referencePreset", "pressureRef",
+      "metricsBody", "markerInspector", "arrayPopover", "addSourceBtn", "duplicateSelectedBtn",
+      "deleteSelectedBtn", "addReceiverBtn", "arrayBuilderBtn", "applyArrayBtn", "closeArrayBtn", "playBtn",
+      "resetBtn", "arrayCount", "arraySpacing", "arrayHeading", "arrayX", "arrayY",
+      "arrayLevel", "cptPresetBtn", "zoomTarget", "zoomInBtn", "zoomOutBtn", "zoomHomeBtn",
+      "spectroReceiverMode", "spectroRange", "spectroPadding",
+      "spectroStatus"
+    ].forEach(id => ui[id] = document.getElementById(id));
+
+    const state = {
+      nextSourceId: 1,
+      nextReceiverId: 1,
+      sources: [],
+      receivers: [],
+      selectedReceiverId: 1,
+      selectedElement: null,
+      medium: {
+        c: 1480,
+        rho: 1025,
+        absorptionModel: "thorp",
+        absorptionDbKm: 1,
+        pRef: DEFAULT_PREF
+      },
+      signal: {
+        mode: "chirp",
+        f0: 8500,
+        f1: 9500,
+        duration: 0.1
+      },
+      view: {
+        plot: "spl",
+        scale: "log",
+        rangeMin: 1,
+        rangeMax: 1000,
+        lateral: 75,
+        lateralCenter: 0,
+        quality: "balanced",
+        colorMin: 40,
+        colorMax: 120,
+        autoScale: true,
+        relativeReference: "field",
+        freqSamples: 9,
+        spectroMode: "enabled",
+        spectroRange: 55,
+        spectroPadding: 0.02
+      },
+      interaction: {
+        placeType: null,
+        dragging: null,
+        panning: null
+      },
+      persist: {
+        suppress: false,
+        saveTimer: 0
+      },
+      render: {
+        rect: null,
+        fieldStats: null,
+        markerPositions: []
+      },
+      animation: {
+        running: false,
+        startMs: 0,
+        time: 0,
+        raf: 0,
+        lastFrameMs: 0
+      }
+    };
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function finiteNumber(value, fallback) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function formatNumber(value, digits) {
+      if (!Number.isFinite(value)) return "--";
+      const abs = Math.abs(value);
+      if (abs !== 0 && (abs >= 10000 || abs < 0.01)) return value.toExponential(2);
+      return value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+    }
+
+    function dbFromPressure(pa) {
+      const p = Math.max(Math.abs(pa), 1e-30);
+      return 20 * Math.log10(p / state.medium.pRef);
+    }
+
+    function pressureFromDb(db) {
+      return state.medium.pRef * Math.pow(10, db / 20);
+    }
+
+    function setPressureReference(newRef) {
+      const oldRef = Math.max(1e-12, finiteNumber(ui.pressureRef.value, state.medium.pRef || DEFAULT_PREF));
+      const nextRef = Math.max(1e-12, finiteNumber(newRef, DEFAULT_PREF));
+      if (Math.abs(oldRef - nextRef) > 1e-18) {
+        const deltaDb = 20 * Math.log10(oldRef / nextRef);
+        for (const source of state.sources) source.levelDb += deltaDb;
+      }
+      state.medium.pRef = nextRef;
+      ui.pressureRef.value = nextRef;
+      renderMarkerInspector();
+      scheduleRender();
+    }
+
+    function normalizeAngleRad(rad) {
+      while (rad > Math.PI) rad -= TAU;
+      while (rad < -Math.PI) rad += TAU;
+      return rad;
+    }
+
+    function hslToRgb(h, s, l) {
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const hp = h / 60;
+      const x = c * (1 - Math.abs(hp % 2 - 1));
+      let r = 0, g = 0, b = 0;
+      if (hp < 1) [r, g, b] = [c, x, 0];
+      else if (hp < 2) [r, g, b] = [x, c, 0];
+      else if (hp < 3) [r, g, b] = [0, c, x];
+      else if (hp < 4) [r, g, b] = [0, x, c];
+      else if (hp < 5) [r, g, b] = [x, 0, c];
+      else [r, g, b] = [c, 0, x];
+      const m = l - c / 2;
+      return [
+        Math.round((r + m) * 255),
+        Math.round((g + m) * 255),
+        Math.round((b + m) * 255)
+      ];
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function palette(stops, t) {
+      const x = clamp(t, 0, 1) * (stops.length - 1);
+      const i = Math.min(stops.length - 2, Math.floor(x));
+      const f = x - i;
+      return [
+        Math.round(lerp(stops[i][0], stops[i + 1][0], f)),
+        Math.round(lerp(stops[i][1], stops[i + 1][1], f)),
+        Math.round(lerp(stops[i][2], stops[i + 1][2], f))
+      ];
+    }
+
+    function heatColor(t) {
+      return palette([
+        [18, 34, 60],
+        [22, 123, 205],
+        [35, 180, 165],
+        [247, 213, 77],
+        [220, 68, 55]
+      ], t);
+    }
+
+    function divergingColor(t) {
+      return palette([
+        [38, 74, 143],
+        [238, 242, 240],
+        [190, 59, 47]
+      ], t);
+    }
+
+    function phaseColor(deg) {
+      const hue = ((deg + 180) / 360) * 300 + 30;
+      return hslToRgb(hue % 360, 0.78, 0.52);
+    }
+
+    function besselJ1(x) {
+      const sign = x < 0 ? -1 : 1;
+      const ax = Math.abs(x);
+      if (ax < 1e-8) return 0;
+      if (ax < 8) {
+        const y = ax * ax;
+        const ans1 = ax * (72362614232 + y * (-7895059235 + y * (242396853.1 +
+          y * (-2972611.439 + y * (15704.48260 + y * (-30.16036606))))));
+        const ans2 = 144725228442 + y * (2300535178 + y * (18583304.74 +
+          y * (99447.43394 + y * (376.9991397 + y))));
+        return sign * ans1 / ans2;
+      }
+      const z = 8 / ax;
+      const y = z * z;
+      const xx = ax - 2.356194491;
+      const ans1 = 1 + y * (0.00183105 + y * (-0.00003516396496 +
+        y * (0.000002457520174 + y * (-0.000000240337019))));
+      const ans2 = 0.04687499995 + y * (-0.0002002690873 +
+        y * (0.000008449199096 + y * (-0.00000088228987 + y * 0.000000105787412)));
+      return sign * Math.sqrt(0.636619772 / ax) * (Math.cos(xx) * ans1 - z * Math.sin(xx) * ans2);
+    }
+
+    function thorpDbPerKm(fHz) {
+      const f = Math.max(0.001, fHz / 1000);
+      return 0.11 * f * f / (1 + f * f) +
+        44 * f * f / (4100 + f * f) +
+        0.000275 * f * f +
+        0.003;
+    }
+
+    function alphaDbPerKm(fHz) {
+      if (state.medium.absorptionModel === "none") return 0;
+      if (state.medium.absorptionModel === "constant") return Math.max(0, state.medium.absorptionDbKm);
+      return thorpDbPerKm(fHz);
+    }
+
+    function sourcePressureAt1m(source) {
+      return pressureFromDb(source.levelDb);
+    }
+
+    function directivity(source, pointX, pointY, fHz) {
+      const dx = pointX - source.x;
+      const dy = pointY - source.y;
+      const theta = normalizeAngleRad(Math.atan2(dy, dx) - source.headingDeg * DEG);
+      const absTheta = Math.abs(theta);
+      const cosTheta = Math.cos(theta);
+      const rear = Math.pow(10, -Math.max(0, source.rearAttenDb) / 20);
+
+      if (source.pattern === "omni") return 1;
+      if (source.pattern === "cardioid") return Math.max(0, 0.5 * (1 + cosTheta));
+      if (source.pattern === "cone") {
+        const half = clamp(source.beamWidthDeg / 2, 1, 179) * DEG;
+        const target = Math.pow(10, -6 / 20);
+        const exponent = Math.max(0.1, Math.log(target) / Math.log(Math.max(0.001, Math.cos(half))));
+        if (cosTheta <= 0) return rear;
+        return Math.pow(Math.max(0, cosTheta), exponent);
+      }
+
+      const diameter = Math.max(0.0001, source.diameterM);
+      const radius = diameter / 2;
+      const k = TAU * fHz / state.medium.c;
+      const x = k * radius * Math.sin(absTheta);
+      let piston;
+      const ax = Math.abs(x);
+      if (ax < 1e-8) {
+        piston = 1;
+      } else if (ax < 1.2) {
+        const x2 = x * x;
+        piston = 1 - x2 / 8 + (x2 * x2) / 192 - (x2 * x2 * x2) / 9216;
+      } else {
+        piston = 2 * besselJ1(x) / x;
+      }
+      const front = cosTheta >= 0 ? 1 : rear;
+      return piston * front;
+    }
+
+    function pressureComplexAt(source, pointX, pointY, fHz, phaseTime) {
+      if (!source.enabled) return [0, 0];
+      const dx = pointX - source.x;
+      const dy = pointY - source.y;
+      const distRaw = Math.sqrt(dx * dx + dy * dy);
+      const minR = Math.max(0.001, source.diameterM / 2);
+      const r = Math.max(minR, distRaw);
+      const f = Math.max(1, fHz + source.freqOffsetHz);
+      const k = TAU * f / state.medium.c;
+      const absorptionDb = alphaDbPerKm(f) * (r / 1000);
+      const absorptionAmp = Math.pow(10, -absorptionDb / 20);
+      const amp = sourcePressureAt1m(source) * directivity(source, pointX, pointY, f) * absorptionAmp / r;
+      const phase = k * r + source.phaseDeg * DEG - TAU * f * (phaseTime || 0);
+      return [amp * Math.cos(phase), amp * Math.sin(phase)];
+    }
+
+    function makeFrequencySamples() {
+      const mode = state.signal.mode;
+      if (mode === "tone") return [Math.max(1, state.signal.f0)];
+      const n = clamp(Math.round(state.view.freqSamples), 1, 61);
+      const count = n % 2 === 0 ? n + 1 : n;
+      if (count <= 1 || Math.abs(state.signal.f1 - state.signal.f0) < 1e-9) return [Math.max(1, state.signal.f0)];
+      const out = [];
+      for (let i = 0; i < count; i++) {
+        out.push(state.signal.f0 + (state.signal.f1 - state.signal.f0) * (i / (count - 1)));
+      }
+      return out;
+    }
+
+    function currentAnimationFrequency() {
+      if (state.signal.mode === "tone") return state.signal.f0;
+      const duration = Math.max(0.001, state.signal.duration);
+      const frac = (state.animation.time % duration) / duration;
+      return state.signal.f0 + (state.signal.f1 - state.signal.f0) * frac;
+    }
+
+    function calcPoint(pointX, pointY, options) {
+      const freqs = options && options.instant ? [currentAnimationFrequency()] : makeFrequencySamples();
+      let power = 0;
+      let centerRe = 0;
+      let centerIm = 0;
+      let instant = 0;
+      const phaseTime = options && options.instant ? state.animation.time : 0;
+      const centerIndex = Math.floor(freqs.length / 2);
+
+      for (let fi = 0; fi < freqs.length; fi++) {
+        let re = 0;
+        let im = 0;
+        for (const source of state.sources) {
+          const p = pressureComplexAt(source, pointX, pointY, freqs[fi], phaseTime);
+          re += p[0];
+          im += p[1];
+        }
+        if (options && options.instant) {
+          instant = re;
+        }
+        if (fi === centerIndex) {
+          centerRe = re;
+          centerIm = im;
+        }
+        power += re * re + im * im;
+      }
+
+      const rms = Math.sqrt(power / Math.max(1, freqs.length));
+      return {
+        rmsPa: rms,
+        splDb: dbFromPressure(rms),
+        phaseDeg: Math.atan2(centerIm, centerRe) / DEG,
+        instantPa: instant,
+        centerRe,
+        centerIm
+      };
+    }
+
+    function addSource(template) {
+      if (state.sources.length >= 10) {
+        alert("This tool is intended for 1 to 10 sources.");
+        return;
+      }
+      const id = state.nextSourceId++;
+      const source = Object.assign({
+        id,
+        name: "S" + id,
+        enabled: true,
+        x: 0,
+        y: (state.sources.length - 1) * 0.0762,
+        headingDeg: 0,
+        levelDb: 110.6,
+        phaseDeg: 0,
+        freqOffsetHz: 0,
+        pattern: "cpt",
+        diameterM: 0.0256,
+        beamWidthDeg: 60,
+        rearAttenDb: 18
+      }, template || {});
+      state.sources.push(source);
+      state.selectedElement = { type: "source", id };
+      renderSourceList();
+      updateToolButtons();
+      scheduleRender();
+    }
+
+    function addReceiver(template) {
+      const id = state.nextReceiverId++;
+      const receiver = Object.assign({
+        id,
+        name: "R" + id,
+        enabled: true,
+        x: id === 1 ? 1 : id === 2 ? 100 : 1000,
+        y: 0
+      }, template || {});
+      state.receivers.push(receiver);
+      if (!state.selectedReceiverId) state.selectedReceiverId = id;
+      state.selectedElement = { type: "receiver", id };
+      renderReceiverList();
+      updateToolButtons();
+      scheduleRender();
+    }
+
+    function applyCptStarter() {
+      state.sources = [];
+      state.nextSourceId = 1;
+      const spacing = finiteNumber(ui.arraySpacing.value, 0.0762);
+      const count = clamp(Math.round(finiteNumber(ui.arrayCount.value, 3)), 1, 10);
+      const center = (count - 1) / 2;
+      for (let i = 0; i < count; i++) {
+        addSource({
+          id: state.nextSourceId,
+          name: "S" + state.nextSourceId,
+          x: 0,
+          y: (i - center) * spacing,
+          headingDeg: 0,
+          levelDb: finiteNumber(ui.arrayLevel.value, 110.6),
+          phaseDeg: 0,
+          pattern: "cpt",
+          diameterM: 0.0256,
+          beamWidthDeg: 60,
+          rearAttenDb: 18
+        });
+      }
+      state.signal.mode = "chirp";
+      state.signal.f0 = 8500;
+      state.signal.f1 = 9500;
+      state.signal.duration = 0.1;
+      syncControlsFromState();
+      renderSourceList();
+      scheduleRender();
+    }
+
+    function applyLinearArray() {
+      const count = clamp(Math.round(finiteNumber(ui.arrayCount.value, state.sources.length || 3)), 1, 10);
+      const spacing = Math.max(0, finiteNumber(ui.arraySpacing.value, 0.0762));
+      const heading = finiteNumber(ui.arrayHeading.value, 0);
+      const cx = finiteNumber(ui.arrayX.value, 0);
+      const cy = finiteNumber(ui.arrayY.value, 0);
+      const level = finiteNumber(ui.arrayLevel.value, 110.6);
+      const existing = state.sources[0] || {};
+      state.sources = [];
+      state.nextSourceId = 1;
+      const center = (count - 1) / 2;
+      const arrayAngle = (heading + 90) * DEG;
+      for (let i = 0; i < count; i++) {
+        const offset = (i - center) * spacing;
+        addSource({
+          x: cx + Math.cos(arrayAngle) * offset,
+          y: cy + Math.sin(arrayAngle) * offset,
+          headingDeg: heading,
+          levelDb: level,
+          phaseDeg: 0,
+          freqOffsetHz: 0,
+          pattern: existing.pattern || "cpt",
+          diameterM: existing.diameterM || 0.0256,
+          beamWidthDeg: existing.beamWidthDeg || 60,
+          rearAttenDb: existing.rearAttenDb ?? 18
+        });
+      }
+      renderSourceList();
+      scheduleRender();
+    }
+
+    function initialState(options) {
+      const opts = options || {};
+      state.persist.suppress = !!opts.suppressSave;
+      state.sources = [];
+      state.receivers = [];
+      state.nextSourceId = 1;
+      state.nextReceiverId = 1;
+      state.selectedReceiverId = 1;
+      state.selectedElement = null;
+      state.interaction.placeType = null;
+      state.interaction.dragging = null;
+      state.interaction.panning = null;
+      state.signal = { mode: "chirp", f0: 8500, f1: 9500, duration: 0.1 };
+      state.medium = { c: 1480, rho: 1025, absorptionModel: "thorp", absorptionDbKm: 1, pRef: DEFAULT_PREF };
+      state.view = {
+        plot: "spl",
+        scale: "log",
+        rangeMin: 1,
+        rangeMax: 1000,
+        lateral: 75,
+        lateralCenter: 0,
+        quality: "balanced",
+        colorMin: 40,
+        colorMax: 120,
+        autoScale: true,
+        relativeReference: "field",
+        freqSamples: 9,
+        spectroMode: "enabled",
+        spectroRange: 55,
+        spectroPadding: 0.02
+      };
+      addSource({ x: 0, y: -0.0762, phaseDeg: 0 });
+      addSource({ x: 0, y: 0, phaseDeg: 0 });
+      addSource({ x: 0, y: 0.0762, phaseDeg: 0 });
+      addReceiver({ x: 1, y: 0 });
+      addReceiver({ x: 100, y: 0 });
+      addReceiver({ x: 1000, y: 0 });
+      syncControlsFromState();
+      renderSourceList();
+      renderReceiverList();
+      updateToolButtons();
+      if (ui.arrayPopover) ui.arrayPopover.hidden = true;
+      state.persist.suppress = false;
+      scheduleRender();
+    }
+
+    function syncControlsFromState() {
+      ui.plotType.value = state.view.plot;
+      ui.rangeScale.value = state.view.scale;
+      ui.rangeMin.value = state.view.rangeMin;
+      ui.rangeMax.value = state.view.rangeMax;
+      ui.lateralSpan.value = state.view.lateral;
+      ui.quality.value = state.view.quality;
+      ui.colorMin.value = state.view.colorMin;
+      ui.colorMax.value = state.view.colorMax;
+      ui.autoScale.checked = state.view.autoScale;
+      ui.relativeReference.value = state.view.relativeReference;
+      ui.freqSamples.value = state.view.freqSamples;
+      ui.signalMode.value = state.signal.mode;
+      ui.duration.value = state.signal.duration;
+      ui.freqStart.value = state.signal.f0;
+      ui.freqEnd.value = state.signal.f1;
+      ui.soundSpeed.value = state.medium.c;
+      ui.density.value = state.medium.rho;
+      ui.absorptionModel.value = state.medium.absorptionModel;
+      ui.absorptionDbKm.value = state.medium.absorptionDbKm;
+      ui.pressureRef.value = state.medium.pRef;
+      ui.referencePreset.value = Math.abs(state.medium.pRef - 1e-6) < 1e-12
+        ? "underwater"
+        : Math.abs(state.medium.pRef - 20e-6) < 1e-12
+          ? "air"
+          : "custom";
+      ui.spectroReceiverMode.value = state.view.spectroMode;
+      ui.spectroRange.value = state.view.spectroRange;
+      ui.spectroPadding.value = state.view.spectroPadding;
+    }
+
+    function readControlsToState() {
+      state.view.plot = ui.plotType.value;
+      state.view.scale = ui.rangeScale.value;
+      state.view.rangeMin = Math.max(0.01, finiteNumber(ui.rangeMin.value, 1));
+      state.view.rangeMax = Math.max(state.view.rangeMin + 0.01, finiteNumber(ui.rangeMax.value, 1000));
+      state.view.lateral = Math.max(0.01, finiteNumber(ui.lateralSpan.value, 75));
+      state.view.quality = ui.quality.value;
+      state.view.colorMin = finiteNumber(ui.colorMin.value, 40);
+      state.view.colorMax = Math.max(state.view.colorMin + 1, finiteNumber(ui.colorMax.value, 120));
+      state.view.autoScale = ui.autoScale.checked;
+      state.view.relativeReference = ui.relativeReference.value;
+      state.view.freqSamples = clamp(Math.round(finiteNumber(ui.freqSamples.value, 9)), 1, 61);
+      state.view.spectroMode = ui.spectroReceiverMode.value;
+      state.view.spectroRange = clamp(finiteNumber(ui.spectroRange.value, 55), 10, 120);
+      state.view.spectroPadding = clamp(finiteNumber(ui.spectroPadding.value, 0.02), 0, 2);
+      state.signal.mode = ui.signalMode.value;
+      state.signal.duration = Math.max(0.001, finiteNumber(ui.duration.value, 0.1));
+      state.signal.f0 = Math.max(1, finiteNumber(ui.freqStart.value, 8500));
+      state.signal.f1 = Math.max(1, finiteNumber(ui.freqEnd.value, state.signal.f0));
+      state.medium.c = Math.max(100, finiteNumber(ui.soundSpeed.value, 1480));
+      state.medium.rho = Math.max(1, finiteNumber(ui.density.value, 1025));
+      state.medium.absorptionModel = ui.absorptionModel.value;
+      state.medium.absorptionDbKm = Math.max(0, finiteNumber(ui.absorptionDbKm.value, 1));
+      state.medium.pRef = Math.max(1e-12, finiteNumber(ui.pressureRef.value, DEFAULT_PREF));
+    }
+
+    function serializableState() {
+      return {
+        version: 2,
+        nextSourceId: state.nextSourceId,
+        nextReceiverId: state.nextReceiverId,
+        sources: state.sources,
+        receivers: state.receivers,
+        selectedReceiverId: state.selectedReceiverId,
+        selectedElement: state.selectedElement,
+        medium: state.medium,
+        signal: state.signal,
+        view: state.view
+      };
+    }
+
+    function saveStateSoon() {
+      if (state.persist.suppress || state.animation.running) return;
+      window.clearTimeout(state.persist.saveTimer);
+      state.persist.saveTimer = window.setTimeout(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(serializableState()));
+        } catch (_) {
+          // Local storage can be unavailable in private or restricted browser contexts.
+        }
+      }, 160);
+    }
+
+    function loadSavedState() {
+      let saved;
+      try {
+        saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      } catch (_) {
+        return false;
+      }
+      if (!saved || saved.version !== 2 || !Array.isArray(saved.sources) || !Array.isArray(saved.receivers)) return false;
+
+      state.persist.suppress = true;
+      state.nextSourceId = Math.max(1, finiteNumber(saved.nextSourceId, 1));
+      state.nextReceiverId = Math.max(1, finiteNumber(saved.nextReceiverId, 1));
+      state.sources = saved.sources.slice(0, 10);
+      state.receivers = saved.receivers;
+      state.selectedReceiverId = finiteNumber(saved.selectedReceiverId, state.receivers[0]?.id || 0);
+      state.selectedElement = saved.selectedElement || null;
+      state.medium = Object.assign({ c: 1480, rho: 1025, absorptionModel: "thorp", absorptionDbKm: 1, pRef: DEFAULT_PREF }, saved.medium || {});
+      state.signal = Object.assign({ mode: "chirp", f0: 8500, f1: 9500, duration: 0.1 }, saved.signal || {});
+      state.view = Object.assign({
+        plot: "spl",
+        scale: "log",
+        rangeMin: 1,
+        rangeMax: 1000,
+        lateral: 75,
+        lateralCenter: 0,
+        quality: "balanced",
+        colorMin: 40,
+        colorMax: 120,
+        autoScale: true,
+        relativeReference: "field",
+        freqSamples: 9,
+        spectroMode: "enabled",
+        spectroRange: 55,
+        spectroPadding: 0.02
+      }, saved.view || {});
+      state.view.rangeMin = Math.max(0.01, state.view.rangeMin);
+      state.view.rangeMax = Math.max(state.view.rangeMin + 0.01, state.view.rangeMax);
+      state.view.lateral = Math.max(0.01, state.view.lateral);
+      state.interaction.placeType = null;
+      state.interaction.dragging = null;
+      state.interaction.panning = null;
+
+      syncControlsFromState();
+      renderMarkerInspector();
+      updateToolButtons();
+      state.persist.suppress = false;
+      scheduleRender();
+      return true;
+    }
+
+    function resetToFactory() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (_) {}
+      initialState();
+    }
+
+    function patternOptions(selected) {
+      const opts = [
+        ["cpt", "CPT-2521C-500 piston"],
+        ["piston", "Circular piston"],
+        ["omni", "Omni"],
+        ["cardioid", "Cardioid"],
+        ["cone", "Cosine cone"]
+      ];
+      return opts.map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+    }
+
+    function selectedItem() {
+      if (!state.selectedElement) return null;
+      const collection = state.selectedElement.type === "source" ? state.sources : state.receivers;
+      return collection.find(item => item.id === state.selectedElement.id) || null;
+    }
+
+    function selectElement(type, id) {
+      state.selectedElement = { type, id };
+      if (type === "receiver") state.selectedReceiverId = id;
+      renderMarkerInspector();
+      updateToolButtons();
+    }
+
+    function clearSelection() {
+      state.selectedElement = null;
+      renderMarkerInspector();
+      updateToolButtons();
+      scheduleRender(true);
+    }
+
+    function updateToolButtons() {
+      const hasSelection = !!selectedItem();
+      ui.duplicateSelectedBtn.disabled = !hasSelection;
+      ui.deleteSelectedBtn.disabled = !hasSelection;
+      ui.addSourceBtn.classList.toggle("active-tool", state.interaction.placeType === "source");
+      ui.addReceiverBtn.classList.toggle("active-tool", state.interaction.placeType === "receiver");
+    }
+
+    function renderMarkerInspector() {
+      const item = selectedItem();
+      if (!item) {
+        ui.markerInspector.hidden = true;
+        ui.markerInspector.innerHTML = "";
+        return;
+      }
+
+      const isSource = state.selectedElement.type === "source";
+      ui.markerInspector.hidden = false;
+      ui.markerInspector.innerHTML = isSource ? `
+        <div class="inspector-title">
+          <span><span class="chip">${item.name}</span> Source</span>
+          <button type="button" data-inspector-action="close">Close</button>
+        </div>
+        <label class="inline-check"><input type="checkbox" data-inspector-field="enabled" ${item.enabled ? "checked" : ""}> Enabled</label>
+        <div class="form-grid three">
+          <label>x, m<input data-inspector-field="x" type="number" step="0.001" value="${item.x}"></label>
+          <label>y, m<input data-inspector-field="y" type="number" step="0.001" value="${item.y}"></label>
+          <label>Heading, deg<input data-inspector-field="headingDeg" type="number" step="1" value="${item.headingDeg}"></label>
+          <label>Level, dB re p_ref @ 1 m<input data-inspector-field="levelDb" type="number" step="0.1" value="${item.levelDb}"></label>
+          <label>Phase, deg<input data-inspector-field="phaseDeg" type="number" step="1" value="${item.phaseDeg}"></label>
+          <label>Freq offset, Hz<input data-inspector-field="freqOffsetHz" type="number" step="1" value="${item.freqOffsetHz}"></label>
+          <label>Pattern<select data-inspector-field="pattern">${patternOptions(item.pattern)}</select></label>
+          <label>Diameter, m<input data-inspector-field="diameterM" type="number" min="0.0001" step="0.0001" value="${item.diameterM}"></label>
+          <label>Beam, deg<input data-inspector-field="beamWidthDeg" type="number" min="1" max="360" step="1" value="${item.beamWidthDeg}"></label>
+          <label>Rear atten., dB<input data-inspector-field="rearAttenDb" type="number" min="0" step="1" value="${item.rearAttenDb}"></label>
+        </div>
+        <div class="popover-actions">
+          <button type="button" data-inspector-action="duplicate">Duplicate</button>
+          <button type="button" data-inspector-action="delete" class="danger">Delete</button>
+        </div>
+      ` : `
+        <div class="inspector-title">
+          <span><span class="chip receiver">${item.name}</span> Receiver</span>
+          <button type="button" data-inspector-action="close">Close</button>
+        </div>
+        <label class="inline-check"><input type="checkbox" data-inspector-field="enabled" ${item.enabled ? "checked" : ""}> Enabled</label>
+        <div class="form-grid">
+          <label>x, m<input data-inspector-field="x" type="number" step="0.001" value="${item.x}"></label>
+          <label>y, m<input data-inspector-field="y" type="number" step="0.001" value="${item.y}"></label>
+        </div>
+        <div class="popover-actions">
+          <button type="button" data-inspector-action="reference" class="primary">Reference</button>
+          <button type="button" data-inspector-action="delete" class="danger">Delete</button>
+        </div>
+      `;
+    }
+
+    function updateInspectorField(event) {
+      const item = selectedItem();
+      if (!item) return;
+      const field = event.target.dataset.inspectorField;
+      if (!field) return;
+      if (event.target.type === "checkbox") {
+        item[field] = event.target.checked;
+      } else if (field === "pattern") {
+        item.pattern = event.target.value;
+        if (item.pattern === "cpt") item.diameterM = 0.0256;
+        if (item.pattern === "piston" && !item.diameterM) item.diameterM = 0.0254;
+        renderMarkerInspector();
+      } else {
+        item[field] = finiteNumber(event.target.value, item[field]);
+      }
+      scheduleRender();
+    }
+
+    function duplicateSelected() {
+      const item = selectedItem();
+      if (!item) return;
+      if (state.selectedElement.type === "source") {
+        const copy = Object.assign({}, item, { x: item.x, y: item.y + 0.0254 });
+        delete copy.id;
+        delete copy.name;
+        addSource(copy);
+      } else {
+        addReceiver({ x: item.x, y: item.y + Math.max(0.5, state.view.lateral * 0.03) });
+      }
+    }
+
+    function deleteSelected() {
+      const item = selectedItem();
+      if (!item) return;
+      if (state.selectedElement.type === "source") {
+        state.sources = state.sources.filter(source => source.id !== item.id);
+      } else {
+        state.receivers = state.receivers.filter(receiver => receiver.id !== item.id);
+        if (state.selectedReceiverId === item.id) state.selectedReceiverId = state.receivers[0]?.id || 0;
+      }
+      clearSelection();
+      scheduleRender();
+    }
+
+    function handleInspectorAction(event) {
+      const button = event.target.closest("[data-inspector-action]");
+      if (!button) return;
+      const action = button.dataset.inspectorAction;
+      if (action === "close") clearSelection();
+      if (action === "duplicate") duplicateSelected();
+      if (action === "delete") deleteSelected();
+      if (action === "reference" && state.selectedElement?.type === "receiver") {
+        state.selectedReceiverId = state.selectedElement.id;
+        scheduleRender();
+      }
+    }
+
+    function renderSourceList() {
+      if (!ui.sourceList) {
+        renderMarkerInspector();
+        return;
+      }
+      if (!state.sources.length) {
+        ui.sourceList.innerHTML = `<div class="empty-message">No sources. Add one from the top bar.</div>`;
+        return;
+      }
+      ui.sourceList.innerHTML = state.sources.map(source => `
+        <article class="item" data-source="${source.id}">
+          <div class="item-header">
+            <div class="item-title">
+              <span class="chip">${source.name}</span>
+              <label class="inline-check"><input type="checkbox" data-field="enabled" ${source.enabled ? "checked" : ""}> Enabled</label>
+            </div>
+            <div class="mini-actions">
+              <button type="button" data-action="duplicate">Duplicate</button>
+              <button type="button" data-action="remove" class="danger">Remove</button>
+            </div>
+          </div>
+          <div class="form-grid three">
+            <label>x, m<input data-field="x" type="number" step="0.001" value="${source.x}"></label>
+            <label>y, m<input data-field="y" type="number" step="0.001" value="${source.y}"></label>
+            <label>Heading, deg<input data-field="headingDeg" type="number" step="1" value="${source.headingDeg}"></label>
+            <label>Level, dB re p_ref @ 1 m<input data-field="levelDb" type="number" step="0.1" value="${source.levelDb}"></label>
+            <label>Phase, deg<input data-field="phaseDeg" type="number" step="1" value="${source.phaseDeg}"></label>
+            <label>Freq offset, Hz<input data-field="freqOffsetHz" type="number" step="1" value="${source.freqOffsetHz}"></label>
+            <label>Pattern<select data-field="pattern">${patternOptions(source.pattern)}</select></label>
+            <label>Diameter, m<input data-field="diameterM" type="number" min="0.0001" step="0.0001" value="${source.diameterM}"></label>
+            <label>Beam width, deg<input data-field="beamWidthDeg" type="number" min="1" max="360" step="1" value="${source.beamWidthDeg}"></label>
+            <label>Rear attenuation, dB<input data-field="rearAttenDb" type="number" min="0" step="1" value="${source.rearAttenDb}"></label>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderReceiverList() {
+      if (!ui.receiverList) {
+        renderMarkerInspector();
+        return;
+      }
+      if (!state.receivers.length) {
+        ui.receiverList.innerHTML = `<div class="empty-message">No receivers. Add measurement points from the top bar.</div>`;
+        return;
+      }
+      ui.receiverList.innerHTML = state.receivers.map(receiver => `
+        <article class="item" data-receiver="${receiver.id}">
+          <div class="item-header">
+            <div class="item-title">
+              <span class="chip receiver">${receiver.name}</span>
+              <label class="inline-check"><input type="checkbox" data-field="enabled" ${receiver.enabled ? "checked" : ""}> Enabled</label>
+            </div>
+            <div class="mini-actions">
+              <button type="button" data-action="reference" ${state.selectedReceiverId === receiver.id ? "class=\"primary\"" : ""}>Reference</button>
+              <button type="button" data-action="remove" class="danger">Remove</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>x, m<input data-field="x" type="number" step="0.001" value="${receiver.x}"></label>
+            <label>y, m<input data-field="y" type="number" step="0.001" value="${receiver.y}"></label>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function setActiveTab(name) {
+      document.querySelectorAll(".tab-button").forEach(button => {
+        button.classList.toggle("active", button.dataset.tab === name);
+      });
+      document.querySelectorAll(".tab-panel").forEach(panel => {
+        panel.classList.toggle("active", panel.id === "tab-" + name);
+      });
+    }
+
+    function qualitySize() {
+      if (state.view.quality === "draft") return [180, 104];
+      if (state.view.quality === "fine") return [460, 260];
+      return [280, 160];
+    }
+
+    function resizeCanvas(canvas, minHeight) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const logicalW = Math.max(320, rect.width || canvas.clientWidth || 800);
+      const logicalH = Math.max(minHeight || 240, rect.height || canvas.clientHeight || 480);
+      const pixelW = Math.round(logicalW * dpr);
+      const pixelH = Math.round(logicalH * dpr);
+      if (canvas.width !== pixelW || canvas.height !== pixelH) {
+        canvas.width = pixelW;
+        canvas.height = pixelH;
+      }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, w: logicalW, h: logicalH, dpr };
+    }
+
+    function worldToCanvas(x, y, rect) {
+      const min = state.view.rangeMin;
+      const max = state.view.rangeMax;
+      const yMin = state.view.lateralCenter - state.view.lateral;
+      const yMax = state.view.lateralCenter + state.view.lateral;
+      let tx;
+      if (state.view.scale === "log") {
+        const safeX = Math.max(min, x);
+        tx = Math.log(safeX / min) / Math.log(max / min);
+      } else {
+        tx = (x - min) / (max - min);
+      }
+      const ty = (yMax - y) / (yMax - yMin);
+      return {
+        x: rect.left + clamp(tx, 0, 1) * rect.width,
+        y: rect.top + clamp(ty, 0, 1) * rect.height
+      };
+    }
+
+    function canvasToWorld(px, py, rect) {
+      const tx = clamp((px - rect.left) / rect.width, 0, 1);
+      const ty = clamp((py - rect.top) / rect.height, 0, 1);
+      const yMin = state.view.lateralCenter - state.view.lateral;
+      const yMax = state.view.lateralCenter + state.view.lateral;
+      let x;
+      if (state.view.scale === "log") {
+        x = state.view.rangeMin * Math.pow(state.view.rangeMax / state.view.rangeMin, tx);
+      } else {
+        x = state.view.rangeMin + tx * (state.view.rangeMax - state.view.rangeMin);
+      }
+      const y = yMax - ty * (yMax - yMin);
+      return { x, y };
+    }
+
+    function syncViewInputs() {
+      ui.rangeMin.value = Number(state.view.rangeMin.toPrecision(8));
+      ui.rangeMax.value = Number(state.view.rangeMax.toPrecision(8));
+      ui.lateralSpan.value = Number(state.view.lateral.toPrecision(8));
+    }
+
+    function zoomView(factor, mode, anchor) {
+      const target = mode || ui.zoomTarget.value || "both";
+      const xAnchor = anchor?.x ?? (state.view.scale === "log"
+        ? Math.sqrt(state.view.rangeMin * state.view.rangeMax)
+        : (state.view.rangeMin + state.view.rangeMax) / 2);
+      const yAnchor = anchor?.y ?? state.view.lateralCenter;
+
+      if (target === "both" || target === "range") {
+        if (state.view.scale === "log") {
+          const logMin = Math.log(Math.max(0.001, state.view.rangeMin));
+          const logMax = Math.log(Math.max(state.view.rangeMin + 0.001, state.view.rangeMax));
+          const logAnchor = Math.log(Math.max(0.001, xAnchor));
+          const ratio = clamp((logAnchor - logMin) / (logMax - logMin), 0, 1);
+          const newSpan = clamp((logMax - logMin) * factor, Math.log(1.02), Math.log(1e7));
+          const newLogMin = logAnchor - ratio * newSpan;
+          state.view.rangeMin = Math.max(0.01, Math.exp(newLogMin));
+          state.view.rangeMax = Math.max(state.view.rangeMin + 0.01, Math.exp(newLogMin + newSpan));
+        } else {
+          const span = state.view.rangeMax - state.view.rangeMin;
+          const ratio = clamp((xAnchor - state.view.rangeMin) / span, 0, 1);
+          const newSpan = clamp(span * factor, 0.01, 1000000);
+          state.view.rangeMin = Math.max(0.01, xAnchor - ratio * newSpan);
+          state.view.rangeMax = state.view.rangeMin + newSpan;
+        }
+      }
+
+      if (target === "both" || target === "lateral") {
+        const yMin = state.view.lateralCenter - state.view.lateral;
+        const yMax = state.view.lateralCenter + state.view.lateral;
+        const span = yMax - yMin;
+        const ratio = clamp((yAnchor - yMin) / span, 0, 1);
+        const newSpan = clamp(span * factor, 0.01, 1000000);
+        const newYMin = yAnchor - ratio * newSpan;
+        const newYMax = newYMin + newSpan;
+        state.view.lateralCenter = (newYMin + newYMax) / 2;
+        state.view.lateral = newSpan / 2;
+      }
+
+      syncViewInputs();
+      scheduleRender();
+    }
+
+    function fitViewToElements() {
+      const points = [
+        ...state.sources.map(source => ({ x: Math.max(0.05, source.x), y: source.y })),
+        ...state.receivers.map(receiver => ({ x: Math.max(0.05, receiver.x), y: receiver.y }))
+      ];
+      if (!points.length) {
+        state.view.rangeMin = 1;
+        state.view.rangeMax = 1000;
+        state.view.lateral = 75;
+        state.view.lateralCenter = 0;
+      } else {
+        const xs = points.map(point => point.x);
+        const ys = points.map(point => point.y);
+        const minX = Math.max(0.05, Math.min(...xs) * 0.7);
+        const maxX = Math.max(minX + 1, Math.max(...xs) * 1.25);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const ySpan = Math.max(0.2, maxY - minY);
+        state.view.rangeMin = minX;
+        state.view.rangeMax = maxX;
+        state.view.lateralCenter = (minY + maxY) / 2;
+        state.view.lateral = Math.max(0.1, ySpan * 0.75);
+      }
+      syncViewInputs();
+      scheduleRender();
+    }
+
+    function panViewFromPixels(dx, dy, start) {
+      if (!start) return;
+      if (start.scale === "log") {
+        const logMin = Math.log(start.rangeMin);
+        const logMax = Math.log(start.rangeMax);
+        const dLog = (dx / start.rect.width) * (logMax - logMin);
+        state.view.rangeMin = Math.max(0.01, Math.exp(logMin - dLog));
+        state.view.rangeMax = Math.max(state.view.rangeMin + 0.01, Math.exp(logMax - dLog));
+      } else {
+        const dRange = (dx / start.rect.width) * (start.rangeMax - start.rangeMin);
+        state.view.rangeMin = Math.max(0.01, start.rangeMin - dRange);
+        state.view.rangeMax = Math.max(state.view.rangeMin + 0.01, start.rangeMax - dRange);
+      }
+      const dY = (dy / start.rect.height) * (2 * start.lateral);
+      state.view.lateralCenter = start.lateralCenter + dY;
+      syncViewInputs();
+    }
+
+    function niceStep(span, target) {
+      const raw = span / Math.max(1, target);
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const norm = raw / mag;
+      if (norm < 1.5) return mag;
+      if (norm < 3) return 2 * mag;
+      if (norm < 7) return 5 * mag;
+      return 10 * mag;
+    }
+
+    function linearTicks(min, max, target) {
+      const step = niceStep(max - min, target || 5);
+      const start = Math.ceil(min / step) * step;
+      const ticks = [];
+      for (let value = start; value <= max + step * 0.25; value += step) {
+        ticks.push(Math.abs(value) < step * 1e-6 ? 0 : value);
+      }
+      return ticks;
+    }
+
+    function logTicks(min, max) {
+      const ticks = [];
+      const startDecade = Math.floor(Math.log10(min));
+      const endDecade = Math.ceil(Math.log10(max));
+      for (let d = startDecade; d <= endDecade; d++) {
+        for (const m of [1, 2, 5]) {
+          const value = m * Math.pow(10, d);
+          if (value >= min * 0.999 && value <= max * 1.001) ticks.push(value);
+        }
+      }
+      return ticks;
+    }
+
+    function drawAxes(ctx, rect, width, height) {
+      ctx.save();
+      ctx.strokeStyle = "#c8d2cf";
+      ctx.fillStyle = "#607078";
+      ctx.lineWidth = 1;
+      ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+      ctx.textBaseline = "top";
+      ctx.textAlign = "center";
+
+      const xTicks = state.view.scale === "log" ? logTicks(state.view.rangeMin, state.view.rangeMax) : linearTicks(state.view.rangeMin, state.view.rangeMax, 7);
+      for (const tick of xTicks) {
+        const p = worldToCanvas(tick, state.view.lateralCenter - state.view.lateral, rect);
+        ctx.beginPath();
+        ctx.moveTo(p.x, rect.top);
+        ctx.lineTo(p.x, rect.bottom);
+        ctx.strokeStyle = "rgba(96,112,120,0.18)";
+        ctx.stroke();
+        ctx.fillText(formatNumber(tick, tick < 10 ? 2 : 0), p.x, rect.bottom + 7);
+      }
+
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      const yMin = state.view.lateralCenter - state.view.lateral;
+      const yMax = state.view.lateralCenter + state.view.lateral;
+      const yTicks = linearTicks(yMin, yMax, 6);
+      for (const tick of yTicks) {
+        const p = worldToCanvas(state.view.rangeMin, tick, rect);
+        ctx.beginPath();
+        ctx.moveTo(rect.left, p.y);
+        ctx.lineTo(rect.right, p.y);
+        ctx.strokeStyle = Math.abs(tick) < 1e-9 ? "rgba(29,37,41,0.42)" : "rgba(96,112,120,0.18)";
+        ctx.stroke();
+        ctx.fillStyle = "#607078";
+        ctx.fillText(formatNumber(tick, 2), rect.left - 8, p.y);
+      }
+
+      ctx.strokeStyle = "#1d2529";
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(rect.left, rect.top, rect.width, rect.height);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "#1d2529";
+      ctx.font = "12px " + getComputedStyle(document.body).fontFamily;
+      ctx.fillText("Range x, m", rect.left + rect.width / 2, height - 8);
+      ctx.save();
+      ctx.translate(15, rect.top + rect.height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("Lateral y, m", 0, 0);
+      ctx.restore();
+      ctx.restore();
+    }
+
+    function drawMarkers(ctx, rect) {
+      state.render.markerPositions = [];
+      ctx.save();
+      ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+      ctx.lineWidth = 2;
+
+      for (const source of state.sources) {
+        if (!source.enabled) continue;
+        let p = worldToCanvas(source.x, source.y, rect);
+        const selected = state.selectedElement?.type === "source" && state.selectedElement.id === source.id;
+        if (source.x < state.view.rangeMin) p.x = rect.left + 7;
+        const angle = source.headingDeg * DEG;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(angle);
+        ctx.fillStyle = "#087b8f";
+        ctx.strokeStyle = selected ? "#111820" : "#ffffff";
+        ctx.lineWidth = selected ? 3 : 2;
+        ctx.beginPath();
+        ctx.moveTo(12, 0);
+        ctx.lineTo(-8, -7);
+        ctx.lineTo(-5, 0);
+        ctx.lineTo(-8, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = "#087b8f";
+        ctx.fillText(source.name, p.x + 9, p.y - 9);
+        state.render.markerPositions.push({ type: "source", id: source.id, x: p.x, y: p.y });
+      }
+
+      for (const receiver of state.receivers) {
+        if (!receiver.enabled) continue;
+        const p = worldToCanvas(receiver.x, receiver.y, rect);
+        const selected = state.selectedElement?.type === "receiver" && state.selectedElement.id === receiver.id;
+        ctx.fillStyle = receiver.id === state.selectedReceiverId ? "#b36b13" : "#ffffff";
+        ctx.strokeStyle = selected ? "#111820" : "#b36b13";
+        ctx.lineWidth = selected ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(p.x - 10, p.y);
+        ctx.lineTo(p.x + 10, p.y);
+        ctx.moveTo(p.x, p.y - 10);
+        ctx.lineTo(p.x, p.y + 10);
+        ctx.stroke();
+        ctx.fillStyle = "#8a4d00";
+        ctx.fillText(receiver.name, p.x + 9, p.y - 9);
+        state.render.markerPositions.push({ type: "receiver", id: receiver.id, x: p.x, y: p.y });
+      }
+      ctx.restore();
+    }
+
+    function sourceReferenceDb() {
+      const enabled = state.sources.filter(s => s.enabled);
+      if (!enabled.length) return 0;
+      return Math.max(...enabled.map(s => s.levelDb));
+    }
+
+    function receiverReferenceDb() {
+      const receiver = state.receivers.find(r => r.id === state.selectedReceiverId) || state.receivers[0];
+      if (!receiver) return 0;
+      return calcPoint(receiver.x, receiver.y).splDb;
+    }
+
+    function computeField() {
+      const [gridW, gridH] = qualitySize();
+      const spl = new Float32Array(gridW * gridH);
+      const phase = new Float32Array(gridW * gridH);
+      const instant = new Float32Array(gridW * gridH);
+      let minSpl = Infinity, maxSpl = -Infinity, maxInstant = 1e-12;
+      const rect = { left: 0, top: 0, width: gridW, height: gridH };
+      const instantMode = state.view.plot === "instant";
+
+      for (let y = 0; y < gridH; y++) {
+        for (let x = 0; x < gridW; x++) {
+          const world = canvasToWorld(x + 0.5, y + 0.5, rect);
+          const point = calcPoint(world.x, world.y, { instant: instantMode });
+          const idx = y * gridW + x;
+          spl[idx] = point.splDb;
+          phase[idx] = point.phaseDeg;
+          instant[idx] = point.instantPa;
+          minSpl = Math.min(minSpl, point.splDb);
+          maxSpl = Math.max(maxSpl, point.splDb);
+          maxInstant = Math.max(maxInstant, Math.abs(point.instantPa));
+        }
+      }
+
+      return { gridW, gridH, spl, phase, instant, minSpl, maxSpl, maxInstant };
+    }
+
+    function drawField() {
+      readControlsToState();
+      const started = performance.now();
+      const { ctx, w, h } = resizeCanvas(ui.fieldCanvas, 430);
+      ctx.clearRect(0, 0, w, h);
+      const rect = {
+        left: 58,
+        top: 18,
+        right: w - 18,
+        bottom: h - 46
+      };
+      rect.width = rect.right - rect.left;
+      rect.height = rect.bottom - rect.top;
+      state.render.rect = rect;
+
+      if (!state.sources.some(s => s.enabled)) {
+        ctx.fillStyle = "#607078";
+        ctx.font = "14px " + getComputedStyle(document.body).fontFamily;
+        ctx.fillText("Add or enable at least one source.", 72, 52);
+        return;
+      }
+
+      const field = computeField();
+      const image = new ImageData(field.gridW, field.gridH);
+      const data = image.data;
+      const plot = state.view.plot;
+      const fieldMax = field.maxSpl;
+      const refDb = state.view.relativeReference === "receiver" ? receiverReferenceDb()
+        : state.view.relativeReference === "source" ? sourceReferenceDb()
+        : fieldMax;
+      const lossRef = sourceReferenceDb();
+
+      let minValue = state.view.colorMin;
+      let maxValue = state.view.colorMax;
+      if (state.view.autoScale) {
+        if (plot === "spl") {
+          minValue = Math.floor(field.minSpl / 5) * 5;
+          maxValue = Math.ceil(field.maxSpl / 5) * 5;
+        } else if (plot === "relative") {
+          minValue = Math.floor((field.minSpl - refDb) / 5) * 5;
+          maxValue = 0;
+        } else if (plot === "loss") {
+          minValue = 0;
+          maxValue = Math.ceil((lossRef - field.minSpl) / 5) * 5;
+        } else if (plot === "instant") {
+          minValue = -field.maxInstant;
+          maxValue = field.maxInstant;
+        }
+      }
+      if (maxValue <= minValue) maxValue = minValue + 1;
+
+      for (let i = 0; i < field.spl.length; i++) {
+        let rgb;
+        if (plot === "phase") {
+          rgb = phaseColor(field.phase[i]);
+        } else if (plot === "instant") {
+          const t = (field.instant[i] - minValue) / (maxValue - minValue);
+          rgb = divergingColor(t);
+        } else {
+          let value = field.spl[i];
+          if (plot === "relative") value -= refDb;
+          if (plot === "loss") value = lossRef - field.spl[i];
+          const t = (value - minValue) / (maxValue - minValue);
+          rgb = heatColor(t);
+        }
+        const base = i * 4;
+        data[base] = rgb[0];
+        data[base + 1] = rgb[1];
+        data[base + 2] = rgb[2];
+        data[base + 3] = 255;
+      }
+
+      const offscreen = document.createElement("canvas");
+      offscreen.width = field.gridW;
+      offscreen.height = field.gridH;
+      offscreen.getContext("2d").putImageData(image, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(offscreen, rect.left, rect.top, rect.width, rect.height);
+      drawAxes(ctx, rect, w, h);
+      drawMarkers(ctx, rect);
+      state.render.fieldStats = { minValue, maxValue, fieldMin: field.minSpl, fieldMax, refDb };
+      updateColorbar(plot, minValue, maxValue);
+      updateSummary();
+      updateMetrics();
+
+      const elapsed = Math.round(performance.now() - started);
+      const freqs = makeFrequencySamples();
+      ui.renderStatus.textContent = `${field.gridW} x ${field.gridH}, ${freqs.length} freq sample${freqs.length === 1 ? "" : "s"}, ${elapsed} ms`;
+    }
+
+    function updateColorbar(plot, minValue, maxValue) {
+      if (plot === "phase") {
+        ui.fieldColorbar.style.background = "linear-gradient(90deg, hsl(30 78% 52%), hsl(105 78% 52%), hsl(180 78% 52%), hsl(255 78% 52%), hsl(330 78% 52%))";
+        ui.colorbarMin.textContent = "-180 deg";
+        ui.colorbarMid.textContent = "0 deg";
+        ui.colorbarMax.textContent = "180 deg";
+        return;
+      }
+      if (plot === "instant") {
+        ui.fieldColorbar.style.background = "linear-gradient(90deg, #264a8f, #eef2f0, #be3b2f)";
+        ui.colorbarMin.textContent = formatNumber(minValue, 3) + " Pa";
+        ui.colorbarMid.textContent = "0 Pa";
+        ui.colorbarMax.textContent = formatNumber(maxValue, 3) + " Pa";
+        return;
+      }
+      ui.fieldColorbar.style.background = "linear-gradient(90deg, #12223c, #167bcd, #23b4a5, #f7d54d, #dc4437)";
+      const suffix = plot === "loss" ? " dB loss" : " dB";
+      ui.colorbarMin.textContent = formatNumber(minValue, 1) + suffix;
+      ui.colorbarMid.textContent = formatNumber((minValue + maxValue) / 2, 1) + suffix;
+      ui.colorbarMax.textContent = formatNumber(maxValue, 1) + suffix;
+    }
+
+    function updateSummary() {
+      const srcCount = state.sources.filter(s => s.enabled).length;
+      const recCount = state.receivers.filter(r => r.enabled).length;
+      const fMid = state.signal.mode === "tone" ? state.signal.f0 : (state.signal.f0 + state.signal.f1) / 2;
+      const lambda = state.medium.c / Math.max(1, fMid);
+      const alpha = alphaDbPerKm(fMid);
+      ui.summaryReadout.textContent = `${srcCount} sources, ${recCount} receivers | lambda ${formatNumber(lambda, 3)} m | alpha ${formatNumber(alpha, 3)} dB/km`;
+    }
+
+    function updateMetrics() {
+      const refDb = state.view.relativeReference === "receiver" ? receiverReferenceDb()
+        : state.view.relativeReference === "source" ? sourceReferenceDb()
+        : state.render.fieldStats ? state.render.fieldStats.fieldMax : 0;
+
+      const rows = state.receivers.filter(r => r.enabled).map(receiver => {
+        const point = calcPoint(receiver.x, receiver.y);
+        let first = Infinity;
+        let last = 0;
+        for (const source of state.sources.filter(s => s.enabled)) {
+          const dx = receiver.x - source.x;
+          const dy = receiver.y - source.y;
+          const delay = Math.sqrt(dx * dx + dy * dy) / state.medium.c;
+          first = Math.min(first, delay);
+          last = Math.max(last, delay);
+        }
+        const intensity = point.rmsPa * point.rmsPa / (state.medium.rho * state.medium.c);
+        return `<tr>
+          <td>${receiver.name}<br>${formatNumber(receiver.x, 2)}, ${formatNumber(receiver.y, 2)} m</td>
+          <td>${formatNumber(point.splDb, 1)} dB</td>
+          <td>${formatNumber(point.splDb - refDb, 1)} dB</td>
+          <td>${formatNumber(first * 1000, 2)} ms<br>spread ${formatNumber((last - first) * 1000, 3)} ms</td>
+          <td>${formatNumber(intensity, 3)} W/m2</td>
+        </tr>`;
+      });
+      ui.metricsBody.innerHTML = rows.length ? rows.join("") : `<tr><td colspan="5">No enabled receivers.</td></tr>`;
+    }
+
+    function drawSpectrograms() {
+      readControlsToState();
+      const activeSources = state.sources.filter(s => s.enabled);
+      let receivers = state.receivers.filter(r => r.enabled);
+      if (state.view.spectroMode === "first3") receivers = receivers.slice(0, 3);
+      if (state.view.spectroMode === "selected") {
+        receivers = receivers.filter(r => r.id === state.selectedReceiverId).slice(0, 1);
+      }
+
+      if (!activeSources.length || !receivers.length) {
+        const { ctx, w, h } = resizeCanvas(ui.spectrogramCanvas, 230);
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "#607078";
+        ctx.font = "14px " + getComputedStyle(document.body).fontFamily;
+        ctx.fillText("Enable at least one source and receiver to draw spectrograms.", 22, 38);
+        return;
+      }
+
+      const started = performance.now();
+      const rowH = 92;
+      const gap = 28;
+      const top = 18;
+      const bottom = 36;
+      const logicalH = top + receivers.length * rowH + (receivers.length - 1) * gap + bottom;
+      ui.spectrogramCanvas.style.height = logicalH + "px";
+      const { ctx, w, h } = resizeCanvas(ui.spectrogramCanvas, logicalH);
+      ctx.clearRect(0, 0, w, h);
+
+      const left = 70;
+      const right = 20;
+      const specW = 440;
+      const specH = 68;
+      const f0 = state.signal.f0;
+      const f1 = state.signal.mode === "tone" ? state.signal.f0 : state.signal.f1;
+      const fMinBase = Math.min(f0, f1);
+      const fMaxBase = Math.max(f0, f1);
+      const bandwidth = Math.max(20, fMaxBase - fMinBase);
+      const fMin = Math.max(1, fMinBase - Math.max(100, bandwidth * 0.12));
+      const fMax = fMaxBase + Math.max(100, bandwidth * 0.12);
+      let maxDelay = 0;
+      for (const receiver of receivers) {
+        for (const source of activeSources) {
+          const dx = receiver.x - source.x;
+          const dy = receiver.y - source.y;
+          maxDelay = Math.max(maxDelay, Math.sqrt(dx * dx + dy * dy) / state.medium.c);
+        }
+      }
+      const tMax = state.signal.duration + maxDelay + state.view.spectroPadding;
+      const rows = [];
+      let globalMax = -Infinity;
+      let globalMin = Infinity;
+
+      for (const receiver of receivers) {
+        const values = new Float32Array(specW * specH);
+        for (let y = 0; y < specH; y++) {
+          const f = fMax - (fMax - fMin) * (y / (specH - 1));
+          for (let x = 0; x < specW; x++) {
+            const t = tMax * (x / (specW - 1));
+            const pa = spectroPressure(receiver, t, f);
+            const db = dbFromPressure(pa);
+            const idx = y * specW + x;
+            values[idx] = db;
+            globalMin = Math.min(globalMin, db);
+            globalMax = Math.max(globalMax, db);
+          }
+        }
+        rows.push({ receiver, values });
+      }
+
+      const minScale = Math.max(globalMin, globalMax - state.view.spectroRange);
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const y0 = top + rowIndex * (rowH + gap);
+        drawSpectrogramRow(ctx, rows[rowIndex], left, y0, w - left - right, rowH, specW, specH, minScale, globalMax, fMin, fMax, tMax);
+      }
+
+      ctx.fillStyle = "#607078";
+      ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+      ctx.textAlign = "right";
+      ctx.fillText(`Scale ${formatNumber(minScale, 1)} to ${formatNumber(globalMax, 1)} dB re p_ref`, w - right, h - 10);
+      ui.spectroStatus.textContent = `${receivers.length} stack${receivers.length === 1 ? "" : "s"}, shared scale, ${Math.round(performance.now() - started)} ms`;
+    }
+
+    function spectroPressure(receiver, t, fHz) {
+      const sigma = state.signal.mode === "tone"
+        ? Math.max(8, state.signal.f0 * 0.0015)
+        : Math.max(18, Math.abs(state.signal.f1 - state.signal.f0) / 75);
+      let re = 0;
+      let im = 0;
+      for (const source of state.sources) {
+        if (!source.enabled) continue;
+        const dx = receiver.x - source.x;
+        const dy = receiver.y - source.y;
+        const r = Math.max(Math.sqrt(dx * dx + dy * dy), Math.max(0.001, source.diameterM / 2));
+        const delay = r / state.medium.c;
+        const localT = t - delay;
+        if (localT < 0 || localT > state.signal.duration) continue;
+        const emittedF = state.signal.mode === "tone"
+          ? state.signal.f0 + source.freqOffsetHz
+          : state.signal.f0 + (state.signal.f1 - state.signal.f0) * (localT / state.signal.duration) + source.freqOffsetHz;
+        const delta = fHz - emittedF;
+        const weight = Math.exp(-0.5 * (delta / sigma) * (delta / sigma));
+        if (weight < 0.00001) continue;
+        const absorptionDb = alphaDbPerKm(fHz) * (r / 1000);
+        const amp = sourcePressureAt1m(source) * directivity(source, receiver.x, receiver.y, fHz) * Math.pow(10, -absorptionDb / 20) / r * weight;
+        const phase = TAU * fHz * r / state.medium.c + source.phaseDeg * DEG;
+        re += amp * Math.cos(phase);
+        im += amp * Math.sin(phase);
+      }
+      return Math.sqrt(re * re + im * im);
+    }
+
+    function drawSpectrogramRow(ctx, row, x0, y0, width, height, specW, specH, minDb, maxDb, fMin, fMax, tMax) {
+      const image = new ImageData(specW, specH);
+      const data = image.data;
+      for (let i = 0; i < row.values.length; i++) {
+        const t = (row.values[i] - minDb) / Math.max(1e-9, maxDb - minDb);
+        const rgb = heatColor(t);
+        const base = i * 4;
+        data[base] = rgb[0];
+        data[base + 1] = rgb[1];
+        data[base + 2] = rgb[2];
+        data[base + 3] = 255;
+      }
+      const offscreen = document.createElement("canvas");
+      offscreen.width = specW;
+      offscreen.height = specH;
+      offscreen.getContext("2d").putImageData(image, 0, 0);
+      ctx.drawImage(offscreen, x0, y0, width, height);
+      ctx.strokeStyle = "#1d2529";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x0, y0, width, height);
+      ctx.fillStyle = "#1d2529";
+      ctx.font = "12px " + getComputedStyle(document.body).fontFamily;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${row.receiver.name}`, x0 - 10, y0 + height / 2 - 8);
+      ctx.fillStyle = "#607078";
+      ctx.font = "10px " + getComputedStyle(document.body).fontFamily;
+      ctx.fillText(`${formatNumber(row.receiver.x, 1)}, ${formatNumber(row.receiver.y, 1)} m`, x0 - 10, y0 + height / 2 + 8);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.42)";
+      ctx.fillStyle = "#607078";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (const tick of linearTicks(0, tMax, 4)) {
+        const x = x0 + width * (tick / tMax);
+        ctx.beginPath();
+        ctx.moveTo(x, y0);
+        ctx.lineTo(x, y0 + height);
+        ctx.stroke();
+        ctx.fillText(formatNumber(tick, 3), x, y0 + height + 4);
+      }
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      for (const tick of linearTicks(fMin, fMax, 4)) {
+        const y = y0 + height * (1 - (tick - fMin) / (fMax - fMin));
+        ctx.beginPath();
+        ctx.moveTo(x0, y);
+        ctx.lineTo(x0 + width, y);
+        ctx.stroke();
+        ctx.fillText(formatNumber(tick / 1000, 2), x0 - 6, y);
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("time, s", x0 + width / 2, y0 + height + 25);
+      ctx.save();
+      ctx.translate(15, y0 + height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.fillText("kHz", 0, 0);
+      ctx.restore();
+    }
+
+    let renderTimer = 0;
+    function scheduleRender(skipSpectrogram) {
+      window.clearTimeout(renderTimer);
+      renderTimer = window.setTimeout(() => {
+        drawField();
+        if (!skipSpectrogram) drawSpectrograms();
+        saveStateSoon();
+      }, 40);
+    }
+
+    function animationLoop(now) {
+      if (!state.animation.running) return;
+      if (!state.animation.startMs) state.animation.startMs = now;
+      const duration = Math.max(0.001, state.signal.duration);
+      state.animation.time = ((now - state.animation.startMs) / 1000) % duration;
+      if (now - state.animation.lastFrameMs > 85) {
+        state.animation.lastFrameMs = now;
+        drawField();
+      }
+      state.animation.raf = requestAnimationFrame(animationLoop);
+    }
+
+    function togglePlay() {
+      state.animation.running = !state.animation.running;
+      ui.playBtn.textContent = state.animation.running ? "Stop" : "Play";
+      ui.playBtn.classList.toggle("danger", state.animation.running);
+      ui.playBtn.classList.toggle("warn", !state.animation.running);
+      if (state.animation.running) {
+        state.view.plot = "instant";
+        ui.plotType.value = "instant";
+        state.animation.startMs = 0;
+        state.animation.lastFrameMs = 0;
+        state.animation.raf = requestAnimationFrame(animationLoop);
+      } else {
+        cancelAnimationFrame(state.animation.raf);
+        scheduleRender();
+      }
+    }
+
+    function hitTestMarker(x, y) {
+      let best = null;
+      let bestD = Infinity;
+      for (const marker of state.render.markerPositions) {
+        const d = Math.hypot(marker.x - x, marker.y - y);
+        if (d < 18 && d < bestD) {
+          best = marker;
+          bestD = d;
+        }
+      }
+      return best;
+    }
+
+    function updateCursorReadout(event) {
+      const rect = state.render.rect;
+      if (!rect) return;
+      const canvasRect = ui.fieldCanvas.getBoundingClientRect();
+      const x = event.clientX - canvasRect.left;
+      const y = event.clientY - canvasRect.top;
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+      const world = canvasToWorld(x, y, rect);
+      const point = calcPoint(world.x, world.y, { instant: state.view.plot === "instant" });
+      ui.cursorReadout.textContent = `x ${formatNumber(world.x, 3)} m, y ${formatNumber(world.y, 3)} m | SPL ${formatNumber(point.splDb, 1)} dB re p_ref | phase ${formatNumber(point.phaseDeg, 1)} deg`;
+    }
+
+    function onCanvasPointerDown(event) {
+      if (!state.render.rect) return;
+      const canvasRect = ui.fieldCanvas.getBoundingClientRect();
+      const x = event.clientX - canvasRect.left;
+      const y = event.clientY - canvasRect.top;
+      if (x < state.render.rect.left || x > state.render.rect.right || y < state.render.rect.top || y > state.render.rect.bottom) return;
+      const marker = hitTestMarker(x, y);
+      if (marker) {
+        selectElement(marker.type, marker.id);
+        state.interaction.dragging = marker;
+        ui.fieldCanvas.setPointerCapture(event.pointerId);
+        return;
+      }
+      const world = canvasToWorld(x, y, state.render.rect);
+      if (state.interaction.placeType === "source") {
+        addSource({ x: world.x, y: world.y });
+        state.interaction.placeType = null;
+        updateToolButtons();
+        return;
+      }
+      if (state.interaction.placeType === "receiver") {
+        addReceiver({ x: world.x, y: world.y });
+        state.interaction.placeType = null;
+        updateToolButtons();
+        return;
+      }
+      clearSelection();
+      state.interaction.panning = {
+        x,
+        y,
+        rect: Object.assign({}, state.render.rect),
+        scale: state.view.scale,
+        rangeMin: state.view.rangeMin,
+        rangeMax: state.view.rangeMax,
+        lateral: state.view.lateral,
+        lateralCenter: state.view.lateralCenter
+      };
+      ui.fieldCanvas.setPointerCapture(event.pointerId);
+    }
+
+    function onCanvasPointerMove(event) {
+      updateCursorReadout(event);
+      if (!state.render.rect) return;
+      const canvasRect = ui.fieldCanvas.getBoundingClientRect();
+      const x = event.clientX - canvasRect.left;
+      const y = event.clientY - canvasRect.top;
+      if (state.interaction.panning) {
+        panViewFromPixels(x - state.interaction.panning.x, y - state.interaction.panning.y, state.interaction.panning);
+        scheduleRender(true);
+        return;
+      }
+      if (!state.interaction.dragging) return;
+      const world = canvasToWorld(x, y, state.render.rect);
+      const collection = state.interaction.dragging.type === "source" ? state.sources : state.receivers;
+      const item = collection.find(entry => entry.id === state.interaction.dragging.id);
+      if (!item) return;
+      item.x = world.x;
+      item.y = world.y;
+      if (state.interaction.dragging.type === "source" && x <= state.render.rect.left + 12) {
+        item.x = 0;
+      }
+      renderMarkerInspector();
+      scheduleRender(true);
+    }
+
+    function onCanvasPointerUp(event) {
+      if (state.interaction.dragging || state.interaction.panning) {
+        try { ui.fieldCanvas.releasePointerCapture(event.pointerId); } catch (_) {}
+        state.interaction.dragging = null;
+        state.interaction.panning = null;
+        scheduleRender();
+      }
+    }
+
+    function onCanvasWheel(event) {
+      if (!state.render.rect) return;
+      const canvasRect = ui.fieldCanvas.getBoundingClientRect();
+      const x = event.clientX - canvasRect.left;
+      const y = event.clientY - canvasRect.top;
+      if (x < state.render.rect.left || x > state.render.rect.right || y < state.render.rect.top || y > state.render.rect.bottom) return;
+      event.preventDefault();
+      const mode = event.shiftKey ? "lateral" : event.altKey || event.ctrlKey ? "range" : ui.zoomTarget.value;
+      const factor = event.deltaY < 0 ? 0.82 : 1.22;
+      zoomView(factor, mode, canvasToWorld(x, y, state.render.rect));
+    }
+
+    function updateSourceFromControl(event) {
+      const article = event.target.closest("[data-source]");
+      if (!article) return;
+      const source = state.sources.find(s => s.id === Number(article.dataset.source));
+      if (!source) return;
+      const field = event.target.dataset.field;
+      if (!field) return;
+      if (event.target.type === "checkbox") {
+        source[field] = event.target.checked;
+      } else if (field === "pattern") {
+        source.pattern = event.target.value;
+        if (source.pattern === "cpt") source.diameterM = 0.0256;
+        if (source.pattern === "piston" && !source.diameterM) source.diameterM = 0.0254;
+        renderSourceList();
+      } else {
+        source[field] = finiteNumber(event.target.value, source[field]);
+      }
+      scheduleRender();
+    }
+
+    function updateReceiverFromControl(event) {
+      const article = event.target.closest("[data-receiver]");
+      if (!article) return;
+      const receiver = state.receivers.find(r => r.id === Number(article.dataset.receiver));
+      if (!receiver) return;
+      const field = event.target.dataset.field;
+      if (!field) return;
+      if (event.target.type === "checkbox") receiver[field] = event.target.checked;
+      else receiver[field] = finiteNumber(event.target.value, receiver[field]);
+      scheduleRender();
+    }
+
+    function handleSourceButton(event) {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const article = button.closest("[data-source]");
+      const source = state.sources.find(s => s.id === Number(article.dataset.source));
+      if (!source) return;
+      if (button.dataset.action === "remove") {
+        state.sources = state.sources.filter(s => s.id !== source.id);
+        renderSourceList();
+        scheduleRender();
+      }
+      if (button.dataset.action === "duplicate") {
+        const copy = Object.assign({}, source, {
+          x: source.x,
+          y: source.y + 0.0254
+        });
+        delete copy.id;
+        delete copy.name;
+        addSource(copy);
+      }
+    }
+
+    function handleReceiverButton(event) {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const article = button.closest("[data-receiver]");
+      const receiver = state.receivers.find(r => r.id === Number(article.dataset.receiver));
+      if (!receiver) return;
+      if (button.dataset.action === "remove") {
+        state.receivers = state.receivers.filter(r => r.id !== receiver.id);
+        if (state.selectedReceiverId === receiver.id) state.selectedReceiverId = state.receivers[0]?.id || 0;
+        renderReceiverList();
+        scheduleRender();
+      }
+      if (button.dataset.action === "reference") {
+        state.selectedReceiverId = receiver.id;
+        renderReceiverList();
+        scheduleRender();
+      }
+    }
+
+    function setPlaceMode(type) {
+      state.interaction.placeType = state.interaction.placeType === type ? null : type;
+      updateToolButtons();
+    }
+
+    function bindEvents() {
+      document.querySelectorAll(".tab-button").forEach(button => {
+        button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+      });
+
+      [
+        ui.plotType, ui.rangeScale, ui.rangeMin, ui.rangeMax, ui.lateralSpan, ui.quality,
+        ui.colorMin, ui.colorMax, ui.autoScale, ui.relativeReference, ui.freqSamples,
+        ui.signalMode, ui.duration, ui.freqStart, ui.freqEnd, ui.soundSpeed, ui.density,
+        ui.absorptionModel, ui.absorptionDbKm, ui.pressureRef, ui.spectroReceiverMode,
+        ui.spectroRange, ui.spectroPadding
+      ].forEach(control => {
+        control.addEventListener("input", () => scheduleRender());
+        control.addEventListener("change", () => scheduleRender());
+      });
+
+      ui.referencePreset.addEventListener("change", () => {
+        if (ui.referencePreset.value === "underwater") setPressureReference(0.000001);
+        if (ui.referencePreset.value === "air") setPressureReference(0.00002);
+      });
+      ui.pressureRef.addEventListener("input", () => {
+        const value = finiteNumber(ui.pressureRef.value, DEFAULT_PREF);
+        ui.referencePreset.value = Math.abs(value - 1e-6) < 1e-12
+          ? "underwater"
+          : Math.abs(value - 20e-6) < 1e-12
+            ? "air"
+            : "custom";
+      });
+      ui.pressureRef.addEventListener("focus", () => {
+        ui.pressureRef.dataset.oldRef = ui.pressureRef.value;
+      });
+      ui.pressureRef.addEventListener("change", () => {
+        const oldRef = finiteNumber(ui.pressureRef.dataset.oldRef, state.medium.pRef || DEFAULT_PREF);
+        const nextRef = finiteNumber(ui.pressureRef.value, DEFAULT_PREF);
+        ui.pressureRef.value = oldRef;
+        setPressureReference(nextRef);
+      });
+
+      ui.addSourceBtn.addEventListener("click", () => setPlaceMode("source"));
+      ui.addReceiverBtn.addEventListener("click", () => setPlaceMode("receiver"));
+      ui.arrayBuilderBtn.addEventListener("click", () => {
+        ui.arrayPopover.hidden = !ui.arrayPopover.hidden;
+      });
+      ui.closeArrayBtn.addEventListener("click", () => { ui.arrayPopover.hidden = true; });
+      ui.applyArrayBtn.addEventListener("click", applyLinearArray);
+      ui.cptPresetBtn.addEventListener("click", applyCptStarter);
+      ui.duplicateSelectedBtn.addEventListener("click", duplicateSelected);
+      ui.deleteSelectedBtn.addEventListener("click", deleteSelected);
+      ui.zoomInBtn.addEventListener("click", () => zoomView(0.72, ui.zoomTarget.value));
+      ui.zoomOutBtn.addEventListener("click", () => zoomView(1.38, ui.zoomTarget.value));
+      ui.zoomHomeBtn.addEventListener("click", fitViewToElements);
+      ui.playBtn.addEventListener("click", togglePlay);
+      ui.resetBtn.addEventListener("click", resetToFactory);
+      ui.markerInspector.addEventListener("input", updateInspectorField);
+      ui.markerInspector.addEventListener("change", updateInspectorField);
+      ui.markerInspector.addEventListener("click", handleInspectorAction);
+      ui.fieldCanvas.addEventListener("pointerdown", onCanvasPointerDown);
+      ui.fieldCanvas.addEventListener("pointermove", onCanvasPointerMove);
+      ui.fieldCanvas.addEventListener("pointerup", onCanvasPointerUp);
+      ui.fieldCanvas.addEventListener("pointercancel", onCanvasPointerUp);
+      ui.fieldCanvas.addEventListener("wheel", onCanvasWheel, { passive: false });
+      window.addEventListener("resize", () => scheduleRender());
+    }
+
+    bindEvents();
+    if (!loadSavedState()) initialState();
+  </script>
+</body>
+</html>
