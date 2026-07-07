@@ -636,6 +636,7 @@
         </div>
         <div class="tool-group">
           <button type="button" id="playBtn" class="warn">Play</button>
+          <button type="button" id="forceRebuildBtn">Force Rebuild</button>
           <button type="button" id="resetBtn">Reset</button>
         </div>
       </div>
@@ -886,7 +887,7 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
       "colorbarMin", "colorbarMid", "colorbarMax", "signalMode", "duration", "freqStart",
       "freqEnd", "soundSpeed", "density", "absorptionModel", "absorptionDbKm", "referencePreset", "pressureRef",
       "metricsBody", "markerInspector", "arrayPopover", "addSourceBtn", "duplicateSelectedBtn",
-      "deleteSelectedBtn", "addReceiverBtn", "arrayBuilderBtn", "applyArrayBtn", "closeArrayBtn", "playBtn",
+      "deleteSelectedBtn", "addReceiverBtn", "arrayBuilderBtn", "applyArrayBtn", "closeArrayBtn", "playBtn", "forceRebuildBtn",
       "resetBtn", "arrayCount", "arraySpacing", "arrayHeading", "arrayX", "arrayY",
       "arrayLevel", "cptPresetBtn", "zoomTarget", "zoomInBtn", "zoomOutBtn", "zoomHomeBtn",
       "spectroReceiverMode", "spectroRange", "spectroPadding",
@@ -2197,6 +2198,7 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
     function drawSpectrograms() {
       readControlsToState();
       const activeSources = state.sources.filter(s => s.enabled);
+      const allAnalysisReceivers = state.receivers.filter(r => r.enabled);
       let receivers = state.receivers.filter(r => r.enabled);
       if (state.view.spectroMode === "first3") receivers = receivers.slice(0, 3);
       if (state.view.spectroMode === "selected") {
@@ -2233,15 +2235,16 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
       const bandwidth = Math.max(20, fMaxBase - fMinBase);
       const fMin = Math.max(1, fMinBase - Math.max(100, bandwidth * 0.12));
       const fMax = fMaxBase + Math.max(100, bandwidth * 0.12);
-      let maxDelay = 0;
+      const tofWindow = spectrogramTimeWindow(activeSources, allAnalysisReceivers);
+      const tMax = tofWindow.tMax;
+
       for (const receiver of receivers) {
         for (const source of activeSources) {
           const dx = receiver.x - source.x;
           const dy = receiver.y - source.y;
-          maxDelay = Math.max(maxDelay, Math.sqrt(dx * dx + dy * dy) / state.medium.c);
+          tofWindow.displayMaxDelay = Math.max(tofWindow.displayMaxDelay, Math.sqrt(dx * dx + dy * dy) / state.medium.c);
         }
       }
-      const tMax = state.signal.duration + maxDelay + state.view.spectroPadding;
       const rows = [];
       let globalMax = -Infinity;
       let globalMin = Infinity;
@@ -2273,7 +2276,30 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
       ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
       ctx.textAlign = "right";
       ctx.fillText(`Scale ${formatNumber(minScale, 1)} to ${formatNumber(globalMax, 1)} dB re p_ref`, w - right, h - 10);
-      ui.spectroStatus.textContent = `${receivers.length} stack${receivers.length === 1 ? "" : "s"}, shared scale, ${Math.round(performance.now() - started)} ms`;
+      ui.spectroStatus.textContent = `${receivers.length} stack${receivers.length === 1 ? "" : "s"}, TOF max ${formatNumber(tofWindow.maxDelay * 1000, 2)} ms, span ${formatNumber(tMax, 3)} s, ${Math.round(performance.now() - started)} ms`;
+    }
+
+    function spectrogramTimeWindow(activeSources, analysisReceivers) {
+      let maxDelay = 0;
+      let minDelay = Infinity;
+      for (const receiver of analysisReceivers) {
+        for (const source of activeSources) {
+          const dx = receiver.x - source.x;
+          const dy = receiver.y - source.y;
+          const r = Math.max(Math.sqrt(dx * dx + dy * dy), Math.max(0.001, source.diameterM / 2));
+          const delay = r / state.medium.c;
+          maxDelay = Math.max(maxDelay, delay);
+          minDelay = Math.min(minDelay, delay);
+        }
+      }
+      if (!Number.isFinite(minDelay)) minDelay = 0;
+      const guard = Math.max(state.view.spectroPadding, 0.02, maxDelay * 0.08, state.signal.duration * 0.1);
+      return {
+        minDelay,
+        maxDelay,
+        displayMaxDelay: 0,
+        tMax: state.signal.duration + maxDelay + guard
+      };
     }
 
     function spectroPressure(receiver, t, fHz) {
@@ -2375,6 +2401,17 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
         if (!skipSpectrogram) drawSpectrograms();
         saveStateSoon();
       }, 40);
+    }
+
+    function forceRebuild() {
+      window.clearTimeout(renderTimer);
+      ui.renderStatus.textContent = "Rebuilding field...";
+      ui.spectroStatus.textContent = "Rebuilding spectrograms...";
+      window.requestAnimationFrame(() => {
+        drawField();
+        drawSpectrograms();
+        saveStateSoon();
+      });
     }
 
     function animationLoop(now) {
@@ -2647,6 +2684,7 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
       ui.zoomOutBtn.addEventListener("click", () => zoomView(1.38, ui.zoomTarget.value));
       ui.zoomHomeBtn.addEventListener("click", fitViewToElements);
       ui.playBtn.addEventListener("click", togglePlay);
+      ui.forceRebuildBtn.addEventListener("click", forceRebuild);
       ui.resetBtn.addEventListener("click", resetToFactory);
       ui.markerInspector.addEventListener("input", updateInspectorField);
       ui.markerInspector.addEventListener("change", updateInspectorField);
