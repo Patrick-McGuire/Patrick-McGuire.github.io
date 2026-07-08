@@ -61,6 +61,10 @@
   .panel.full { grid-column: 1 / -1; }
   .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .row > label { color: var(--muted); width: 80px; flex-shrink: 0; font-size: 12px; }
+  .row > label.checkline {
+    width: auto; flex: 1; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
   .row .value { font-family: var(--mono); flex: 1; }
   .row input[type="number"], .row input[type="text"] {
     background: var(--panel-2); border: 1px solid var(--border);

@@ -14,7 +14,7 @@ const ui = {
   status: $('status'), dot: $('dot'),
   connectBtn: $('connectBtn'), disconnectBtn: $('disconnectBtn'),
   deviceTime: $('deviceTime'), deviceUnix: $('deviceUnix'), timeDrift: $('timeDrift'),
-  readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'),
+  readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'), autoSyncTime: $('autoSyncTime'),
   battery: $('battery'), readBatBtn: $('readBatBtn'),
   txMessage: $('txMessage'), txSendBtn: $('txSendBtn'), txStatus: $('txStatus'),
   cfgVersion: $('cfgVersion'),
@@ -69,6 +69,7 @@ function setConnected(connected) {
     ui.txMessage, ui.txSendBtn,
   ];
   ctrls.forEach(el => el.disabled = !connected);
+  ui.autoSyncTime.disabled = connected;
   ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(el => el.disabled = !connected);
 }
 
@@ -85,6 +86,7 @@ async function openAndStart(port) {
   state.readLoop = readLoop();
   // Initial pull
   setTimeout(() => {
+    if (ui.autoSyncTime.checked) syncTimeToNow();
     send('--config');
     send('--time');
     send('--bat');
@@ -206,6 +208,11 @@ async function send(cmd) {
   } catch (e) {
     log('[send error: ' + e.message + ']', 'err');
   }
+}
+
+function syncTimeToNow() {
+  const now = Math.floor(Date.now() / 1000);
+  send('--time -setUnix ' + now);
 }
 
 function handleLine(line) {
@@ -438,10 +445,7 @@ function downloadCsv() {
 ui.connectBtn.addEventListener('click', connect);
 ui.disconnectBtn.addEventListener('click', disconnect);
 ui.readTimeBtn.addEventListener('click', () => send('--time'));
-ui.syncTimeBtn.addEventListener('click', () => {
-  const now = Math.floor(Date.now() / 1000);
-  send('--time -setUnix ' + now);
-});
+ui.syncTimeBtn.addEventListener('click', syncTimeToNow);
 ui.readBatBtn.addEventListener('click', () => send('--bat'));
 ui.readConfigBtn.addEventListener('click', () => send('--config'));
 ui.setIdBtn.addEventListener('click', () => {
