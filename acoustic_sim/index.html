@@ -550,6 +550,48 @@
       font-size: 13px;
     }
 
+    @media (min-width: 1500px) {
+      .field-area {
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+        align-items: start;
+      }
+
+      .graph-menu,
+      .field-toolbar {
+        grid-column: 1 / -1;
+      }
+
+      .canvas-shell {
+        grid-column: 1;
+        grid-row: 3;
+      }
+
+      .field-footer {
+        grid-column: 1;
+        grid-row: 4;
+      }
+
+      .spectrogram-section {
+        grid-column: 2;
+        grid-row: 3 / span 2;
+        position: sticky;
+        top: 54px;
+      }
+
+      .spectro-toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .spectro-toolbar .status-line {
+        grid-column: 1 / -1;
+      }
+
+      .spectrogram-shell {
+        max-height: min(72vh, 800px);
+        overflow: auto;
+      }
+    }
+
     @media (max-width: 1180px) {
       .workspace {
         grid-template-columns: 1fr;
@@ -2211,6 +2253,7 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
         ctx.fillStyle = "#607078";
         ctx.font = "14px " + getComputedStyle(document.body).fontFamily;
         ctx.fillText("Enable at least one source and receiver to draw spectrograms.", 22, 38);
+        ui.spectroStatus.textContent = "Spectrogram needs at least one enabled source and receiver.";
         return;
       }
 
@@ -2276,19 +2319,28 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
       ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
       ctx.textAlign = "right";
       ctx.fillText(`Scale ${formatNumber(minScale, 1)} to ${formatNumber(globalMax, 1)} dB re p_ref`, w - right, h - 10);
-      ui.spectroStatus.textContent = `${receivers.length} stack${receivers.length === 1 ? "" : "s"}, TOF max ${formatNumber(tofWindow.maxDelay * 1000, 2)} ms, span ${formatNumber(tMax, 3)} s, ${Math.round(performance.now() - started)} ms`;
+      const farthestPath = tofWindow.farthestReceiverName
+        ? `, farthest ${tofWindow.farthestReceiverName} from ${tofWindow.farthestSourceName}`
+        : "";
+      ui.spectroStatus.textContent = `${receivers.length} stack${receivers.length === 1 ? "" : "s"}, TOF max ${formatNumber(tofWindow.maxDelay * 1000, 2)} ms${farthestPath}, span ${formatNumber(tMax, 3)} s, ${Math.round(performance.now() - started)} ms`;
     }
 
     function spectrogramTimeWindow(activeSources, analysisReceivers) {
       let maxDelay = 0;
       let minDelay = Infinity;
+      let farthestReceiverName = "";
+      let farthestSourceName = "";
       for (const receiver of analysisReceivers) {
         for (const source of activeSources) {
           const dx = receiver.x - source.x;
           const dy = receiver.y - source.y;
           const r = Math.max(Math.sqrt(dx * dx + dy * dy), Math.max(0.001, source.diameterM / 2));
           const delay = r / state.medium.c;
-          maxDelay = Math.max(maxDelay, delay);
+          if (delay > maxDelay) {
+            maxDelay = delay;
+            farthestReceiverName = receiver.name;
+            farthestSourceName = source.name;
+          }
           minDelay = Math.min(minDelay, delay);
         }
       }
@@ -2297,6 +2349,8 @@ Default p_ref = 1e-6 Pa, the underwater dB re 1 uPa reference.</div>
       return {
         minDelay,
         maxDelay,
+        farthestReceiverName,
+        farthestSourceName,
         displayMaxDelay: 0,
         tMax: state.signal.duration + maxDelay + guard
       };
