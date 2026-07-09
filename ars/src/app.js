@@ -8,6 +8,20 @@ const TEST_MESSAGES = new Set([
 ]);
 // Bit 0 (NONE) is filtered separately on device; only the real event types are user-toggleable.
 const EVENT_TOGGLE_BITS = [1, 2, 3, 4, 5, 6];
+// Nominal number of sync offsets the consensus decoder sweeps per frame
+// (RANGE = 2 symbols, STEP = ARS_BLOCK_SIZE/2 in Decoder.cpp → ~138 offsets).
+// The DECODED byte stores the winner's agreement normalized to 0..31; we
+// un-normalize it back to an approximate absolute vote count for display.
+const CONSENSUS_MAX_OFFSETS = 138;
+
+// Decode a DECODED event's attribute byte into consensus telemetry:
+// [candidates:3 bits][voteScore:5 bits]. Returns a compact display string.
+function formatDecodedAttr(attr) {
+  const candidates = (attr >> 5) & 0x07;
+  const voteScore = attr & 0x1F;
+  const approxVotes = Math.round((voteScore / 31) * CONSENSUS_MAX_OFFSETS);
+  return `${candidates}c/~${approxVotes}v`;
+}
 
 const $ = (id) => document.getElementById(id);
 const ui = {
@@ -400,10 +414,7 @@ function buildLogRow(e) {
   const dateStr = e.time > 0 ? new Date(e.time * 1000).toISOString().replace('T', ' ').replace(/\..+$/, '') : '—';
   let attrStr = String(e.attr);
   if (typeName === 'DECODED') {
-    // attr packs (errors << 6) | (quality & 0x3F)
-    const errors = (e.attr >> 6) & 0x03;
-    const quality = e.attr & 0x3F;
-    attrStr = `${errors}|${quality}`;
+    attrStr = formatDecodedAttr(e.attr);
   }
   const valU16 = e.value & 0xFFFF;
   const valHex = '0x' + valU16.toString(16).toUpperCase().padStart(4, '0');
@@ -419,9 +430,7 @@ function downloadCsv() {
     const typeName = EVENT_TYPE_NAMES[e.type] || '';
     let attrStr = String(e.attr);
     if (typeName === 'DECODED') {
-      const errors = (e.attr >> 6) & 0x03;
-      const quality = e.attr & 0x3F;
-      attrStr = `${errors}|${quality}`;
+      attrStr = formatDecodedAttr(e.attr);
     }
     const valU16 = e.value & 0xFFFF;
     const valHex = '0x' + valU16.toString(16).toUpperCase().padStart(4, '0');
