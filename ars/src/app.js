@@ -8,19 +8,16 @@ const TEST_MESSAGES = new Set([
 ]);
 // Bit 0 (NONE) is filtered separately on device; only the real event types are user-toggleable.
 const EVENT_TOGGLE_BITS = [1, 2, 3, 4, 5, 6];
-// Nominal number of sync offsets the consensus decoder sweeps per frame
-// (RANGE = 2 symbols, STEP = ARS_BLOCK_SIZE/2 in Decoder.cpp → ~138 offsets).
-// The DECODED byte stores the winner's agreement normalized to 0..31; we
-// un-normalize it back to an approximate absolute vote count for display.
-const CONSENSUS_MAX_OFFSETS = 138;
-
 // Decode a DECODED event's attribute byte into consensus telemetry:
-// [candidates:3 bits][voteScore:5 bits]. Returns a compact display string.
+// [candidates:3 bits][voteScore:5 bits]. voteScore is the winner's agreement
+// normalized to 0..31 (fraction of the offsets scanned that voted for it); the
+// per-frame denominator isn't stored, so we show the fraction as a percentage
+// rather than an un-recoverable absolute vote count. Returns "Nc/P%".
 function formatDecodedAttr(attr) {
   const candidates = (attr >> 5) & 0x07;
   const voteScore = attr & 0x1F;
-  const approxVotes = Math.round((voteScore / 31) * CONSENSUS_MAX_OFFSETS);
-  return `${candidates}c/~${approxVotes}v`;
+  const agreePct = Math.round((voteScore / 31) * 100);
+  return `${candidates}c/${agreePct}%`;
 }
 
 const $ = (id) => document.getElementById(id);
