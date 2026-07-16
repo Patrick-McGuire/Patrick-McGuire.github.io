@@ -198,7 +198,7 @@ function renderSelector(m,s,cf){
       var usedElse=(usage[pin]||[]).some(function(u){return !(u.s===s&&u.sig===sig);});
       var compat=pinValidFor(combos,sig,pin,sel);
       var bad=usedElse||!compat;
-      html+='<div class="ddopt'+(bad?' bad':(isSel?' good':''))+
+      html+='<div class="ddopt'+(bad?' bad':' good')+
             '" data-s="'+s+'" data-sig="'+sig+'" data-pin="'+pin+'">'+
             (isSel?'<span class="chk">✓</span>':'')+chipInner(m,pin,s)+
             (usedElse?'<span class="tag warn">in use</span>':'')+
