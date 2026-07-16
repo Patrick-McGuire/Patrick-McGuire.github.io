@@ -41,9 +41,31 @@ select{min-width:210px;cursor:pointer}
 .protorow button{flex:1;min-width:56px;padding:6px 4px;font-size:13px}
 .protorow button.sel{background:var(--accent);color:#0c1a26;border-color:var(--accent);font-weight:600}
 .selarea{margin-top:6px;border-top:1px dashed var(--line);padding-top:9px}
-.sigrow{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:center;margin-bottom:7px}
-.sigrow .sn{font-size:12.5px;color:var(--muted);font-weight:600}
-.sigrow select{min-width:0;width:100%}
+.onlyopt{font-size:12px;color:var(--accent2);background:#20301f;border:1px solid #33502e;
+  border-radius:6px;padding:4px 8px;margin-bottom:8px}
+.picker{display:grid;grid-template-columns:52px 1fr;gap:8px;align-items:start;margin-bottom:7px}
+.picker .sn{font-size:12.5px;color:var(--muted);font-weight:600;padding-top:6px}
+.dd{position:relative}
+.dd>summary{list-style:none;cursor:pointer;background:var(--panel2);border:1px solid var(--line);
+  border-radius:7px;padding:6px 9px;font-size:12.5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.dd>summary::-webkit-details-marker{display:none}
+.dd>summary::after{content:"▾";margin-left:auto;color:var(--muted)}
+.dd[open]>summary::after{content:"▴"}
+.ddcur.empty .ph{color:var(--muted)}
+.ddcur.cur-conflict{border-color:var(--err);box-shadow:inset 0 0 0 1px var(--err)}
+.ddcur.cur-invalid{border-color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn)}
+.ddlist{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 3px);max-height:260px;overflow:auto;
+  background:#202020;border:1px solid var(--line);border-radius:8px;padding:4px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.ddopt{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:5px 8px;border-radius:6px;cursor:pointer;
+  font-size:12.5px;border:1px solid transparent}
+.ddopt:hover{background:#2b2b2b}
+.ddopt.sel{background:#233246;border-color:var(--accent)}
+.ddopt.used{color:var(--err)}
+.ddopt.used .mono{color:var(--err)}
+.ddopt.incompat{opacity:.62;font-style:italic;border-style:dashed;border-color:var(--warn)}
+.err-line{color:var(--err);font-size:12.5px;margin-top:4px}
+.tag.amb{background:#4a3a1e;color:var(--warn)}
 .refwrap{margin-top:6px}
 .refwrap summary{cursor:pointer;color:var(--muted);font-size:12.5px}
 table.ref{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}
@@ -115,8 +137,12 @@ code{font-family:var(--mono);background:#1c1c1c;padding:1px 4px;border-radius:4p
 
   <div class="tabbody" id="tab-cfg">
     <p class="legend">Peripheral function per pin: <b class="pio-C">PIO_SERCOM</b> = mux column&nbsp;C,
-    <b class="pio-D">PIO_SERCOM_ALT</b> = mux column&nbsp;D. Pick a protocol for a SERCOM, then choose a pin for
-    each signal — only pins that form a hardware-valid, Arduino-supported set are offered.</p>
+    <b class="pio-D">PIO_SERCOM_ALT</b> = mux column&nbsp;D. Pick a protocol per SERCOM, then a pin per signal.
+    Every option stays visible so you can experiment: <b style="color:var(--err)">red</b> = pin already used by
+    another SERCOM signal (conflict); <b style="color:var(--warn)">dashed/dimmed</b> = not compatible with your
+    other picks for this SERCOM (wrong pad layout, or a different IOSET on SAMD51). You can still select them —
+    invalid or conflicting choices are flagged rather than blocked. When only one pin set is valid it is
+    pre-selected.</p>
     <div id="grid" class="grid"></div>
   </div>
 

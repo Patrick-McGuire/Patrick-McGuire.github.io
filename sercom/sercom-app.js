@@ -97,25 +97,6 @@ function matchCombos(combos, sel){
 // ---- rendering ----------------------------------------------------------
 function fill(el, html){ el.innerHTML=html; }
 
-function pinLabel(pin, func){
-  var s='<span class="mono">'+pin+'</span>';
-  if(func) s+=' <span class="'+(func==='C'?'pio-C':'pio-D')+'">'+pioName(func)+'</span>';
-  var ap=ardPin(pin);
-  if(ap==='CUSTOM') s+='<span class="tag cust">needs custom variant</span>';
-  else if(ap!==null) s+='<span class="tag ard">Arduino pin '+ap+'</span>';
-  if(mcu().special && mcu().special[pin]) s+='<span class="tag warn">'+esc(mcu().special[pin])+'</span>';
-  return s;
-}
-// short label for <option>
-function optLabel(m, pin, s){
-  var f=pinFunc(m,pin,s), ap=ardPin(pin);
-  var t=pin+' ('+pioName(f)+')';
-  if(ap==='CUSTOM') t+=' — custom variant';
-  else if(ap!==null) t+=' — pin '+ap;
-  if(m.special&&m.special[pin]) t+=' ⚠';
-  return t;
-}
-
 function renderConfigure(){
   var m=mcu(), grid=document.getElementById('grid'), html='';
   m.sercoms.forEach(function(s){
@@ -136,10 +117,48 @@ function renderConfigure(){
   grid.querySelectorAll('.protorow button').forEach(function(b){
     b.onclick=function(){ setProto(+b.dataset.s, b.dataset.proto); };
   });
-  // wire selects
-  grid.querySelectorAll('select.sigsel').forEach(function(sel){
-    sel.onchange=function(){ setSignal(+sel.dataset.s, sel.dataset.sig, sel.value); };
+  // wire dropdown options
+  grid.querySelectorAll('.ddopt').forEach(function(o){
+    o.onclick=function(ev){ ev.preventDefault(); setSignal(+o.dataset.s, o.dataset.sig, o.dataset.pin); };
   });
+}
+
+// pin ->[{s,sig}] : every pin currently assigned to some SERCOM signal
+function usageMap(){
+  var um={};
+  for(var s in state.cfg){ var cf=state.cfg[s]; if(!cf||!cf.proto||cf.proto==='none') continue;
+    PROTO_SIG[cf.proto].forEach(function(sig){ var pin=cf.sel[sig];
+      if(pin){ (um[pin]=um[pin]||[]).push({s:+s,sig:sig}); } });
+  }
+  return um;
+}
+// is `pin` for `sig` compatible with the OTHER signals currently chosen?
+function pinValidFor(combos, sig, pin, sel){
+  var c={}; for(var k in sel){ if(sel[k] && k!==sig) c[k]=sel[k]; }
+  c[sig]=pin;
+  return matchCombos(combos,c).length>0;
+}
+// short inner HTML for a pin (pad/func + badges)
+function chipInner(m, pin, s){
+  var e=muxEntry(m,pin,s), f=e?e.f:null;
+  var h='<span class="mono">'+pin+'</span> <span class="'+(f==='C'?'pio-C':'pio-D')+'">'+
+        (f==='C'?'SERCOM':'ALT')+'·PAD'+(e?e.pad:'?')+'</span>';
+  if(isI2C(m,pin)) h+='<span class="tag i2c">I²C</span>';
+  var ap=ardPin(pin);
+  if(ap==='CUSTOM') h+='<span class="tag cust">custom</span>';
+  else if(ap!==null) h+='<span class="tag ard">#'+ap+'</span>';
+  if(m.special&&m.special[pin]) h+='<span class="tag warn" title="'+esc(m.special[pin])+'">⚠</span>';
+  return h;
+}
+function invalidReason(m,s,proto,sel){
+  if(m.iosets){
+    var iosets=m.iosets[String(s)]||[], pins=PROTO_SIG[proto].map(function(sg){return sel[sg];});
+    var oneSet=iosets.some(function(io){ return pins.every(function(p){ return io.indexOf(p)>=0; }); });
+    if(!oneSet) return 'these pins are not all in the same IOSET — a SERCOM cannot mix IOSETs on SAMD51.';
+  }
+  if(proto==='spi') return 'MOSI/SCK are not a supported pad layout (DOPO), or two signals land on the same PAD.';
+  if(proto==='uart') return 'TX must be on '+(m.uartTx.length>1?'PAD0 or PAD2':'PAD0')+', and RX on a different PAD.';
+  return 'this pin combination is not hardware-valid for '+proto.toUpperCase()+'.';
 }
 
 function renderSelector(m,s,cf){
@@ -147,36 +166,47 @@ function renderSelector(m,s,cf){
   var combos=enumCombos(m,s,proto);
   var html='<div class="selarea">';
   if(combos.length===0){
-    html+='<div class="empty">No valid '+proto.toUpperCase()+' pin set is available for SERCOM'+s+' on this MCU'+
-      (proto==='i2c'?' (no I²C-capable PAD0/PAD1 pair).':'.')+'</div></div>';
+    html+='<div class="empty">No valid '+proto.toUpperCase()+' pin set exists for SERCOM'+s+' on this MCU'+
+      (proto==='i2c'?' — no I²C-capable PAD0/PAD1 pair is available.':'.')+'</div></div>';
     return html;
   }
-  // cascading selects
   var sel=cf.sel||{};
-  sigs.forEach(function(sig,idx){
-    // options consistent with previously chosen signals
-    var prior={}; for(var j=0;j<idx;j++){ prior[sigs[j]]=sel[sigs[j]]; }
-    var pool=matchCombos(combos,prior);
-    var opts={};
-    pool.forEach(function(cb){ if(cb.sig[sig]) opts[cb.sig[sig].pin]=1; });
-    var pins=Object.keys(opts).sort();
-    html+='<div class="sigrow"><div class="sn">'+SIG_LABEL[sig]+'</div><select class="sigsel" data-s="'+s+'" data-sig="'+sig+'">';
-    html+='<option value="">— choose —</option>';
+  var usage=usageMap();
+  if(combos.length===1) html+='<div class="onlyopt">Only one valid pin set for this SERCOM — pre-selected.</div>';
+
+  sigs.forEach(function(sig){
+    var uni={}; combos.forEach(function(cb){ if(cb.sig[sig]) uni[cb.sig[sig].pin]=1; });
+    var pins=Object.keys(uni).sort();
+    var chosen=sel[sig];
+    var curConf = chosen && (usage[chosen]||[]).some(function(u){return !(u.s===s&&u.sig===sig);});
+    var curBad  = chosen && !pinValidFor(combos,sig,chosen,sel);
+    var curCls  = chosen ? ('has'+(curConf?' cur-conflict':'')+(curBad?' cur-invalid':'')) : 'empty';
+    html+='<div class="picker"><div class="sn">'+SIG_LABEL[sig]+'</div>';
+    html+='<details class="dd"><summary class="ddcur '+curCls+'">'+
+          (chosen? chipInner(m,chosen,s) : '<span class="ph">— choose —</span>')+'</summary>';
+    html+='<div class="ddlist">';
     pins.forEach(function(pin){
-      html+='<option value="'+pin+'"'+(sel[sig]===pin?' selected':'')+'>'+esc(optLabel(m,pin,s))+'</option>';
+      var isSel=chosen===pin;
+      var usedElse=(usage[pin]||[]).some(function(u){return !(u.s===s&&u.sig===sig);});
+      var compat=pinValidFor(combos,sig,pin,sel);
+      html+='<div class="ddopt'+(isSel?' sel':'')+(usedElse?' used':'')+(compat?'':' incompat')+
+            '" data-s="'+s+'" data-sig="'+sig+'" data-pin="'+pin+'">'+chipInner(m,pin,s)+
+            (usedElse?'<span class="tag warn">in use</span>':'')+
+            (compat?'':'<span class="tag amb">≠ current pads</span>')+'</div>';
     });
-    html+='</select></div>';
+    html+='</div></details></div>';
   });
-  // completion status
-  var full=matchCombos(combos,sel);
-  var complete = sigs.every(function(sg){return sel[sg];}) && full.length>=1;
-  if(complete){
-    var cb=full[0], parts=sigs.map(function(sg){return SIG_LABEL[sg]+'='+cb.sig[sg].pin;});
-    html+='<div class="done">✓ '+parts.join(', ')+'</div>';
+
+  var allSel=sigs.every(function(sg){return sel[sg];});
+  var match=allSel?matchCombos(combos,sel):[];
+  if(match.length){
+    var cb=match[0], parts=sigs.map(function(sg){return SIG_LABEL[sg]+'='+cb.sig[sg].pin;});
+    html+='<div class="done">✓ valid — '+parts.join(', ')+'</div>';
+  } else if(allSel){
+    html+='<div class="err-line">⚠ Not a valid set: '+esc(invalidReason(m,s,proto,sel))+'</div>';
   } else {
-    html+='<div class="hint">Pick a pin for each signal to complete this SERCOM.</div>';
+    html+='<div class="hint">Pick a pin for each signal.</div>';
   }
-  // reference: all possible pins per pad
   html+='<details class="refwrap"><summary>All possible pins for SERCOM'+s+
         (m.iosets?' (grouped by IOSET)':'')+'</summary>'+renderRef(m,s,proto)+'</details>';
   html+='</div>';
@@ -213,116 +243,115 @@ function refCell(m,pin,s){
 }
 
 // ---- state mutations ----------------------------------------------------
+function reRender(){ renderConfigure(); renderSummary(); }
 function setProto(s, proto){
   if(!state.cfg[s]) state.cfg[s]={};
   if(state.cfg[s].proto===proto){ proto='none'; }
   state.cfg[s]={proto:proto, sel:{}};
-  renderConfigure();
+  if(proto!=='none'){
+    var combos=enumCombos(mcu(),s,proto);
+    if(combos.length===1){ PROTO_SIG[proto].forEach(function(sg){ state.cfg[s].sel[sg]=combos[0].sig[sg].pin; }); }
+  }
+  reRender();
 }
+// select a pin for one signal; clicking the current pin clears it. No cascade — other picks are kept
+// (invalid/conflicting results are shown, not prevented) so the user can freely experiment.
 function setSignal(s, sig, pin){
   var cf=state.cfg[s]; if(!cf) return;
-  var sigs=PROTO_SIG[cf.proto];
-  cf.sel[sig]=pin;
-  // clear any downstream selections that are now inconsistent
-  var combos=enumCombos(mcu(),s,cf.proto);
-  var idx=sigs.indexOf(sig);
-  for(var j=idx+1;j<sigs.length;j++){
-    var prior={}; for(var k=0;k<=idx;k++) prior[sigs[k]]=cf.sel[sigs[k]];
-    var pool=matchCombos(combos,prior);
-    var ok=pool.some(function(cb){return cb.sig[sigs[j]] && cb.sig[sigs[j]].pin===cf.sel[sigs[j]];});
-    if(!ok) cf.sel[sigs[j]]='';
-  }
-  renderConfigure();
+  cf.sel[sig] = (cf.sel[sig]===pin) ? '' : pin;
+  reRender();
 }
 
 // ---- summary ------------------------------------------------------------
-function completeConfigs(){
+// every SERCOM with a protocol chosen, with completeness / validity resolved
+function allStatuses(){
   var m=mcu(), res=[];
   m.sercoms.forEach(function(s){
     var cf=state.cfg[s]; if(!cf||cf.proto==='none'||!cf.proto) return;
     var sigs=PROTO_SIG[cf.proto];
-    if(!sigs.every(function(sg){return cf.sel[sg];})) return;
-    var combos=matchCombos(enumCombos(m,s,cf.proto), cf.sel);
-    if(!combos.length) return;
-    res.push({s:s, proto:cf.proto, combo:combos[0]});
+    var complete=sigs.every(function(sg){return cf.sel[sg];});
+    var match=complete?matchCombos(enumCombos(m,s,cf.proto), cf.sel):[];
+    res.push({s:s, proto:cf.proto, sel:cf.sel, sigs:sigs, complete:complete,
+              valid:match.length>0, combo:match[0]||null});
   });
   return res;
 }
 
 function renderSummary(){
-  var m=mcu(), cfgs=completeConfigs(), el=document.getElementById('summary'), html='';
-  // pin usage map for conflicts
-  var used={};
-  cfgs.forEach(function(c){ var sigs=PROTO_SIG[c.proto];
-    sigs.forEach(function(sg){ var pin=c.combo.sig[sg].pin; (used[pin]=used[pin]||[]).push('SERCOM'+c.s+' '+SIG_LABEL[sg]); }); });
-  var conflicts=Object.keys(used).filter(function(p){return used[p].length>1;});
+  var m=mcu(), st=allStatuses(), el=document.getElementById('summary'), html='';
+  var usage=usageMap();
+  var conflicts=Object.keys(usage).filter(function(p){return usage[p].length>1;});
+  var complete=st.filter(function(x){return x.complete;});
+  var validCfgs=complete.filter(function(x){return x.valid;});
+  var invalidCfgs=complete.filter(function(x){return !x.valid;});
+  var incomplete=st.filter(function(x){return !x.complete;}).map(function(x){return x.s;});
 
-  // partial (chosen but incomplete) configs
-  var partial=[];
-  m.sercoms.forEach(function(s){ var cf=state.cfg[s]; if(cf&&cf.proto&&cf.proto!=='none'){
-    var sigs=PROTO_SIG[cf.proto]; if(!sigs.every(function(sg){return cf.sel[sg];})) partial.push(s); }});
-
-  if(cfgs.length===0){
-    html+='<div class="empty">No fully-configured SERCOMs yet. Choose a protocol and pins on the Configure tab.</div>';
+  if(st.length===0){
+    fill(el,'<div class="empty">No SERCOMs configured yet. Choose a protocol and pins on the Configure tab.</div>');
+    return;
   }
-
   if(conflicts.length){
-    html+='<div class="note err"><b>Pin conflict:</b> the following pins are assigned to more than one SERCOM signal — '+
-      conflicts.map(function(p){return '<span class="mono">'+p+'</span> ('+used[p].join(', ')+')';}).join('; ')+'.</div>';
+    html+='<div class="note err"><b>Pin conflict:</b> '+conflicts.map(function(p){
+      return '<span class="mono">'+p+'</span> ('+usage[p].map(function(u){return 'SERCOM'+u.s+' '+SIG_LABEL[u.sig];}).join(', ')+')';
+    }).join('; ')+' — the same physical pin is assigned to more than one signal.</div>';
   }
-  if(partial.length){
-    html+='<div class="note warn">SERCOM'+partial.join(', SERCOM')+' '+(partial.length>1?'have':'has')+
-      ' a protocol selected but incomplete pins — not shown below.</div>';
+  if(invalidCfgs.length){
+    html+='<div class="note err"><b>Invalid pin set:</b> '+invalidCfgs.map(function(x){
+      return 'SERCOM'+x.s+' — '+esc(invalidReason(m,x.s,x.proto,x.sel));
+    }).join('  ')+' No code is generated for these until fixed.</div>';
+  }
+  if(incomplete.length){
+    html+='<div class="note warn">SERCOM'+incomplete.join(', SERCOM')+' '+(incomplete.length>1?'have':'has')+
+      ' a protocol selected but not all pins chosen.</div>';
   }
 
-  if(cfgs.length){
+  if(complete.length){
     html+='<h2>Pin map</h2><table class="sum"><tr><th>SERCOM</th><th>Protocol</th><th>Signal</th>'+
       '<th>Port pin</th><th>PAD</th><th>Peripheral (Arduino)</th>'+(state.variantId?'<th>Arduino pin</th>':'')+'<th>Notes</th></tr>';
-    cfgs.forEach(function(c){ var sigs=PROTO_SIG[c.proto];
-      sigs.forEach(function(sg,i){
-        var e=c.combo.sig[sg], conf=conflicts.indexOf(e.pin)>=0;
-        html+='<tr'+(conf?' class="conflict"':'')+'>';
-        if(i===0){ html+='<td rowspan="'+sigs.length+'">SERCOM'+c.s+'</td><td rowspan="'+sigs.length+'">'+c.proto.toUpperCase()+'</td>'; }
-        html+='<td>'+SIG_LABEL[sg]+'</td><td class="mono">'+e.pin+'</td><td>PAD'+e.pad+'</td>'+
-          '<td class="'+(e.func==='C'?'pio-C':'pio-D')+'">'+pioName(e.func)+'</td>';
-        if(state.variantId){ var ap=ardPin(e.pin);
+    complete.forEach(function(x){
+      x.sigs.forEach(function(sg,i){
+        var pin=x.sel[sg], e=(x.combo&&x.combo.sig[sg])||muxEntry(m,pin,x.s)||{pad:'?',func:'?'};
+        var conf=conflicts.indexOf(pin)>=0;
+        html+='<tr'+(conf||!x.valid?' class="conflict"':'')+'>';
+        if(i===0){ html+='<td rowspan="'+x.sigs.length+'">SERCOM'+x.s+(x.valid?'':' <span class="tag amb">invalid</span>')+
+          '</td><td rowspan="'+x.sigs.length+'">'+x.proto.toUpperCase()+'</td>'; }
+        html+='<td>'+SIG_LABEL[sg]+'</td><td class="mono">'+pin+'</td><td>'+(e.pad==='?'?'?':'PAD'+e.pad)+'</td>'+
+          '<td class="'+(e.func==='C'?'pio-C':(e.func==='D'?'pio-D':''))+'">'+(e.func==='?'?'—':pioName(e.func))+'</td>';
+        if(state.variantId){ var ap=ardPin(pin);
           html+='<td>'+(ap==='CUSTOM'?'<span class="tag cust">custom variant</span>':(ap!==null?ap:'—'))+'</td>'; }
-        var notes=[]; if(isI2C(m,e.pin)&&c.proto==='i2c') notes.push('I²C-capable');
-        if(m.special&&m.special[e.pin]) notes.push(m.special[e.pin]);
+        var notes=[]; if(isI2C(m,pin)&&x.proto==='i2c') notes.push('I²C-capable');
+        if(m.special&&m.special[pin]) notes.push(m.special[pin]);
         if(conf) notes.push('CONFLICT');
         html+='<td>'+esc(notes.join('; '))+'</td></tr>';
       });
     });
     html+='</table>';
+  }
 
-    // reserved-pin warnings
-    var resv=[]; cfgs.forEach(function(c){ PROTO_SIG[c.proto].forEach(function(sg){ var pin=c.combo.sig[sg].pin;
-      if(m.special&&m.special[pin]) resv.push(pin+' — '+m.special[pin]); }); });
-    resv=resv.filter(function(v,i,a){return a.indexOf(v)===i;});
-    if(resv.length) html+='<div class="note warn"><b>Heads up:</b> you are using pins with a default alternate function: '+
-      resv.map(esc).join('; ')+'. Make sure your board does not also need them for that purpose.</div>';
+  var pinsInUse=[]; complete.forEach(function(x){ x.sigs.forEach(function(sg){ pinsInUse.push(x.sel[sg]); }); });
+  var resv=pinsInUse.filter(function(p,i,a){return a.indexOf(p)===i && m.special && m.special[p];})
+                    .map(function(p){return p+' — '+m.special[p];});
+  if(resv.length) html+='<div class="note warn"><b>Heads up:</b> pins with a default alternate function are in use: '+
+    resv.map(esc).join('; ')+'. Make sure your board does not also need them for that purpose.</div>';
 
-    // custom variant summary
-    if(state.variantId){
-      var customs=[]; cfgs.forEach(function(c){ PROTO_SIG[c.proto].forEach(function(sg){ var pin=c.combo.sig[sg].pin;
-        if(ardPin(pin)==='CUSTOM') customs.push(pin); }); });
-      customs=customs.filter(function(v,i,a){return a.indexOf(v)===i;});
-      if(customs.length) html+='<div class="note warn"><b>Custom variant required:</b> '+customs.map(function(p){return '<span class="mono">'+p+'</span>';}).join(', ')+
-        ' '+(customs.length>1?'are':'is')+' not broken out / mapped by the <b>'+esc(D.variants[state.variantId].name)+
-        '</b> stock variant. To use '+(customs.length>1?'these pins':'this pin')+' you must create a custom variant (add '+
-        (customs.length>1?'them':'it')+' to <span class="mono">g_APinDescription[]</span>).</div>';
-    } else {
-      html+='<div class="note">No board variant selected — pin numbers below are shown as port pins (e.g. <span class="mono">PA08</span>). '+
-        'When you build your board you must map each pin to an Arduino pin number in your variant\'s '+
-        '<span class="mono">g_APinDescription[]</span>. Select a board above to check against a stock variant.</div>';
-    }
+  if(state.variantId){
+    var customs=pinsInUse.filter(function(p,i,a){return a.indexOf(p)===i && ardPin(p)==='CUSTOM';});
+    if(customs.length) html+='<div class="note warn"><b>Custom variant required:</b> '+
+      customs.map(function(p){return '<span class="mono">'+p+'</span>';}).join(', ')+' '+(customs.length>1?'are':'is')+
+      ' not broken out / mapped by the <b>'+esc(D.variants[state.variantId].name)+'</b> stock variant. Add '+
+      (customs.length>1?'them':'it')+' to <span class="mono">g_APinDescription[]</span> in a custom variant to use '+
+      (customs.length>1?'them':'it')+'.</div>';
+  } else if(complete.length){
+    html+='<div class="note">No board variant selected — pins are shown as port pins (e.g. <span class="mono">PA08</span>). '+
+      'Map each to an Arduino pin number in your variant\'s <span class="mono">g_APinDescription[]</span>, or select a board above.</div>';
+  }
 
+  if(validCfgs.length){
     html+='<h2>Arduino code</h2>';
     html+='<div class="note">Add <code>#include "wiring_private.h"</code> for <code>pinPeripheral()</code>. '+
       'Instantiate the objects globally, then call the setup lines inside <code>setup()</code>.</div>';
-    cfgs.forEach(function(c){ html+=genCode(m,c); });
+    validCfgs.forEach(function(x){ html+=genCode(m,{s:x.s,proto:x.proto,combo:x.combo}); });
   }
-
   fill(el, html);
 }
 
