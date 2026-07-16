@@ -121,6 +121,12 @@ function renderConfigure(){
   grid.querySelectorAll('.ddopt').forEach(function(o){
     o.onclick=function(ev){ ev.preventDefault(); setSignal(+o.dataset.s, o.dataset.sig, o.dataset.pin); };
   });
+  // only one dropdown open at a time
+  grid.querySelectorAll('details.dd').forEach(function(dd){
+    dd.addEventListener('toggle', function(){
+      if(dd.open){ grid.querySelectorAll('details.dd').forEach(function(o){ if(o!==dd) o.open=false; }); }
+    });
+  });
 }
 
 // pin ->[{s,sig}] : every pin currently assigned to some SERCOM signal
@@ -138,11 +144,12 @@ function pinValidFor(combos, sig, pin, sel){
   c[sig]=pin;
   return matchCombos(combos,c).length>0;
 }
-// short inner HTML for a pin (pad/func + badges)
+// short inner HTML for a pin. The port pin is emphasised; pad/ALT/etc. are secondary.
+// Only PIO_SERCOM_ALT is tagged ("ALT") — plain SERCOM (function C) is the default, so left unlabelled.
 function chipInner(m, pin, s){
   var e=muxEntry(m,pin,s), f=e?e.f:null;
-  var h='<span class="mono">'+pin+'</span> <span class="'+(f==='C'?'pio-C':'pio-D')+'">'+
-        (f==='C'?'SERCOM':'ALT')+'·PAD'+(e?e.pad:'?')+'</span>';
+  var h='<b class="pin">'+pin+'</b> <span class="meta">PAD'+(e?e.pad:'?')+'</span>';
+  if(f==='D') h+='<span class="tag alt">ALT</span>';
   if(isI2C(m,pin)) h+='<span class="tag i2c">I²C</span>';
   var ap=ardPin(pin);
   if(ap==='CUSTOM') h+='<span class="tag cust">custom</span>';
@@ -180,19 +187,22 @@ function renderSelector(m,s,cf){
     var chosen=sel[sig];
     var curConf = chosen && (usage[chosen]||[]).some(function(u){return !(u.s===s&&u.sig===sig);});
     var curBad  = chosen && !pinValidFor(combos,sig,chosen,sel);
-    var curCls  = chosen ? ('has'+(curConf?' cur-conflict':'')+(curBad?' cur-invalid':'')) : 'empty';
+    var curCls  = !chosen ? 'empty' : ((curConf||curBad)?'bad':'good');
     html+='<div class="picker"><div class="sn">'+SIG_LABEL[sig]+'</div>';
     html+='<details class="dd"><summary class="ddcur '+curCls+'">'+
           (chosen? chipInner(m,chosen,s) : '<span class="ph">— choose —</span>')+'</summary>';
     html+='<div class="ddlist">';
+    html+='<div class="ddopt clear" data-s="'+s+'" data-sig="'+sig+'" data-pin="">— none —</div>';
     pins.forEach(function(pin){
       var isSel=chosen===pin;
       var usedElse=(usage[pin]||[]).some(function(u){return !(u.s===s&&u.sig===sig);});
       var compat=pinValidFor(combos,sig,pin,sel);
-      html+='<div class="ddopt'+(isSel?' sel':'')+(usedElse?' used':'')+(compat?'':' incompat')+
-            '" data-s="'+s+'" data-sig="'+sig+'" data-pin="'+pin+'">'+chipInner(m,pin,s)+
+      var bad=usedElse||!compat;
+      html+='<div class="ddopt'+(bad?' bad':(isSel?' good':''))+
+            '" data-s="'+s+'" data-sig="'+sig+'" data-pin="'+pin+'">'+
+            (isSel?'<span class="chk">✓</span>':'')+chipInner(m,pin,s)+
             (usedElse?'<span class="tag warn">in use</span>':'')+
-            (compat?'':'<span class="tag amb">≠ current pads</span>')+'</div>';
+            (compat?'':'<span class="tag amb">incompatible</span>')+'</div>';
     });
     html+='</div></details></div>';
   });

@@ -51,21 +51,27 @@ select{min-width:210px;cursor:pointer}
 .dd>summary::-webkit-details-marker{display:none}
 .dd>summary::after{content:"▾";margin-left:auto;color:var(--muted)}
 .dd[open]>summary::after{content:"▴"}
+/* the port pin is the thing to look at — make it pop; everything else recedes */
+.pin{font-family:var(--mono);font-weight:700;font-size:14px;color:#fff;letter-spacing:.02em}
+.meta{font-size:11px;color:var(--muted)}
 .ddcur.empty .ph{color:var(--muted)}
-.ddcur.cur-conflict{border-color:var(--err);box-shadow:inset 0 0 0 1px var(--err)}
-.ddcur.cur-invalid{border-color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn)}
-.ddlist{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 3px);max-height:260px;overflow:auto;
+.ddcur.good{background:#20401f;border-color:#3f7a45}
+.ddcur.bad{background:#4a2020;border-color:var(--err)}
+.ddlist{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 3px);max-height:280px;overflow:auto;
   background:#202020;border:1px solid var(--line);border-radius:8px;padding:4px;
   box-shadow:0 8px 24px rgba(0,0,0,.5)}
-.ddopt{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:5px 8px;border-radius:6px;cursor:pointer;
-  font-size:12.5px;border:1px solid transparent}
-.ddopt:hover{background:#2b2b2b}
-.ddopt.sel{background:#233246;border-color:var(--accent)}
-.ddopt.used{color:var(--err)}
-.ddopt.used .mono{color:var(--err)}
-.ddopt.incompat{opacity:.62;font-style:italic;border-style:dashed;border-color:var(--warn)}
+.ddopt{display:flex;align-items:center;flex-wrap:wrap;gap:5px;padding:6px 8px;border-radius:6px;cursor:pointer;
+  font-size:12.5px;border:1px solid transparent;background:#262626}
+.ddopt+.ddopt{margin-top:3px}
+.ddopt:hover{filter:brightness(1.18)}
+.ddopt.good{background:#20401f;border-color:#3a6e40}
+.ddopt.bad{background:#4a2020;border-color:#7a3a3a}
+.ddopt.clear{background:transparent;color:var(--muted);font-style:italic;border-bottom:1px solid var(--line);
+  border-radius:0;margin-bottom:4px}
+.chk{color:#8fe08f;font-weight:700}
 .err-line{color:var(--err);font-size:12.5px;margin-top:4px}
-.tag.amb{background:#4a3a1e;color:var(--warn)}
+.tag.amb{background:#5a3320;color:#f0b48a}
+.tag.alt{background:#3a2a4a;color:#d3aef0}
 .refwrap{margin-top:6px}
 .refwrap summary{cursor:pointer;color:var(--muted);font-size:12.5px}
 table.ref{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}
@@ -136,13 +142,14 @@ code{font-family:var(--mono);background:#1c1c1c;padding:1px 4px;border-radius:4p
   </div>
 
   <div class="tabbody" id="tab-cfg">
-    <p class="legend">Peripheral function per pin: <b class="pio-C">PIO_SERCOM</b> = mux column&nbsp;C,
-    <b class="pio-D">PIO_SERCOM_ALT</b> = mux column&nbsp;D. Pick a protocol per SERCOM, then a pin per signal.
-    Every option stays visible so you can experiment: <b style="color:var(--err)">red</b> = pin already used by
-    another SERCOM signal (conflict); <b style="color:var(--warn)">dashed/dimmed</b> = not compatible with your
-    other picks for this SERCOM (wrong pad layout, or a different IOSET on SAMD51). You can still select them —
-    invalid or conflicting choices are flagged rather than blocked. When only one pin set is valid it is
-    pre-selected.</p>
+    <p class="legend">Pick a protocol per SERCOM, then a pin per signal. Every option stays visible so you can
+    experiment. In the dropdowns: <b style="background:#20401f;color:#fff;padding:1px 6px;border-radius:4px">green</b>
+    = your current valid pick; <b style="background:#4a2020;color:#fff;padding:1px 6px;border-radius:4px">red</b>
+    = a problem — either the pin is already used by another SERCOM signal (<span class="tag warn">in&nbsp;use</span>)
+    or it's <span class="tag amb">incompatible</span> with your other picks here (wrong pad layout, or a different
+    IOSET on SAMD51). Red options are still selectable — problems are flagged, not blocked. A pin marked
+    <span class="tag alt">ALT</span> is <b class="pio-D">PIO_SERCOM_ALT</b>; unmarked pins are plain
+    <b class="pio-C">PIO_SERCOM</b>. When only one pin set is valid it is pre-selected.</p>
     <div id="grid" class="grid"></div>
   </div>
 
