@@ -1,4 +1,4 @@
-const CACHE = 'sillygoose-4898759';
+const CACHE = 'sillygoose-4911176';
 const ASSETS = ['./', './index.html', './manifest.webmanifest'];
 self.addEventListener('install', (e) => {
   self.skipWaiting();
