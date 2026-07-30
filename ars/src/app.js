@@ -33,7 +33,10 @@ function formatDecodedAttr(attr) {
 const BLE_SERVICE_UUID = '0000fff0-0000-1000-8000-00805f9b34fb';
 const BLE_NOTIFY_UUID = '0000fff1-0000-1000-8000-00805f9b34fb';
 const BLE_WRITE_UUID = '0000fff2-0000-1000-8000-00805f9b34fb';
+const BLE_CCCD_UUID = '00002902-0000-1000-8000-00805f9b34fb';
 const BLE_WRITE_CHUNK_SIZE = 20;
+const BLE_POLL_FALLBACK_MS = 400; // how often to poll readValue() once notify looks stuck
+const BLE_POLL_FALLBACK_STALE_MS = 1500; // how long without any notify activity before polling kicks in
 
 // Adapts a BLE notify characteristic to the ReadableStreamDefaultReader
 // shape ({read, cancel, releaseLock}) so readLoop() doesn't need to care
@@ -43,8 +46,12 @@ class BleReader {
     this._queue = [];
     this._waiting = null;
     this._closed = false;
+    this.lastActivityAt = 0; // last time push() was called, used by the poll fallback
+    this.lastPolled = null;  // last bytes seen via poll, to avoid re-delivering a stale value
+    this.pollTimer = null;
   }
   push(chunk) {
+    this.lastActivityAt = Date.now();
     if (this._waiting) {
       const resolve = this._waiting;
       this._waiting = null;
@@ -60,13 +67,85 @@ class BleReader {
   }
   cancel() {
     this._closed = true;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     if (this._waiting) {
       const resolve = this._waiting;
       this._waiting = null;
       resolve({ value: undefined, done: true });
     }
   }
-  releaseLock() {}
+  releaseLock() {
+    // handleConnectionLost() (the involuntary-disconnect/reconnect path)
+    // only calls releaseLock(), never cancel() -- clear the poll timer here
+    // too so it can't outlive the connection it was polling for.
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+}
+
+function bytesEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// Some Web Bluetooth polyfills (confirmed on Bluefy on iOS -- writes/reads
+// work fine but characteristicvaluechanged is never delivered even though
+// startNotifications() doesn't throw: see
+// https://github.com/capacitor-community/bluetooth-le/issues/470) silently
+// fail to actually wire up notifications. Since this is unverifiable without
+// the specific broken browser in hand, three independent, harmless-if-unused
+// fallbacks are stacked here rather than betting on one:
+//   1. Bind the value-changed handler both the standard way and via the
+//      legacy on... property, in case a given polyfill only fires one.
+//   2. Also explicitly write the CCCD descriptor -- on a polyfill where
+//      startNotifications() is a no-op, this may be what actually flips the
+//      peripheral into notifying. No-op/harmless where it's unsupported or
+//      redundant.
+//   3. If nothing arrives via notify for a while, fall back to polling
+//      readValue(). Imperfect for multi-chunk responses (a poll only ever
+//      sees whatever the single latest chunk happens to be, so intermediate
+//      chunks can be missed) -- but far better than total silence.
+async function setupNotify(notifyChar, bleReader) {
+  const onValue = (value) => {
+    bleReader.push(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+  };
+  notifyChar.addEventListener('characteristicvaluechanged', (e) => onValue(e.target.value));
+  notifyChar.oncharacteristicvaluechanged = (e) => onValue(e.target.value);
+
+  try {
+    await notifyChar.startNotifications();
+  } catch (e) {
+    log('[bluetooth startNotifications failed: ' + e.message + ']', 'warn');
+  }
+
+  try {
+    const cccd = await notifyChar.getDescriptor(BLE_CCCD_UUID);
+    await cccd.writeValue(Uint8Array.of(0x01, 0x00));
+  } catch (_) {
+    // Not fatal -- most stacks don't need this once startNotifications() has
+    // run, and some polyfills don't expose descriptors at all.
+  }
+
+  bleReader.lastActivityAt = Date.now();
+  bleReader.pollTimer = setInterval(async () => {
+    if (Date.now() - bleReader.lastActivityAt < BLE_POLL_FALLBACK_STALE_MS) return;
+    try {
+      const value = await notifyChar.readValue();
+      const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      if (!bytesEqual(bytes, bleReader.lastPolled)) {
+        bleReader.lastPolled = bytes;
+        onValue(value);
+      }
+    } catch (_) {
+      // Transient GATT busy, etc. -- next tick retries.
+    }
+  }, BLE_POLL_FALLBACK_MS);
 }
 
 // Adapts a BLE write characteristic to the WritableStreamDefaultWriter
@@ -224,11 +303,7 @@ async function openBluetoothDevice(device) {
   const writeChar = await service.getCharacteristic(BLE_WRITE_UUID);
 
   const bleReader = new BleReader();
-  notifyChar.addEventListener('characteristicvaluechanged', (e) => {
-    const v = e.target.value;
-    bleReader.push(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
-  });
-  await notifyChar.startNotifications();
+  await setupNotify(notifyChar, bleReader);
 
   // Reused on auto-reconnect (same device object) -- avoid stacking listeners.
   device.removeEventListener('gattserverdisconnected', handleConnectionLost);
