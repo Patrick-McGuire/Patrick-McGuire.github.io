@@ -8,6 +8,12 @@
 <head>
 <meta charset="utf-8">
 
+<script>
+(function () {
+  if (localStorage.getItem('arsForceDesktop') === '1') return;
+  if (/Mobi|iPhone|iPod/i.test(navigator.userAgent)) location.replace('mobile/');
+})();
+</script>
 <title>ARS Console</title>
 <style>
   :root {
@@ -126,6 +132,12 @@
     background: #3a2020; border: 1px solid #6a3030; color: #ffb0b0;
     padding: 12px; border-radius: 6px; margin: 16px;
   }
+  .site-switch {
+    position: fixed; bottom: 8px; right: 10px;
+    font-size: 12px; z-index: 1000;
+  }
+  .site-switch a { color: var(--muted); text-decoration: underline; }
+  .site-switch a:hover { color: var(--accent); }
 
 </style>
 </head>
@@ -267,6 +279,7 @@
   </section>
 </main>
 
+<div class="site-switch"><a href="mobile/">Mobile site</a></div>
 <script>
 'use strict';
 
