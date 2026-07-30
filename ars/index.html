@@ -358,9 +358,19 @@ class BleWriter {
     return this._chain;
   }
   async _writeChunks(data) {
+    // Per spec, writeValueWithoutResponse() exists on every characteristic
+    // regardless of whether the peripheral actually supports it -- the
+    // browser is supposed to reject the *call* at runtime if not, not omit
+    // the method. So `'writeValueWithoutResponse' in this._char` (which
+    // this used to check) doesn't actually tell you anything; the real
+    // answer is the characteristic's declared properties. This module's
+    // write characteristic (FFF2) is documented read/write only (no
+    // write-without-response), and a strict implementation enforcing that
+    // is exactly what turns into "a network error occurred" here.
+    const preferWithoutResponse = !!(this._char.properties && this._char.properties.writeWithoutResponse);
     for (let offset = 0; offset < data.length; offset += BLE_WRITE_CHUNK_SIZE) {
       const chunk = data.slice(offset, offset + BLE_WRITE_CHUNK_SIZE);
-      if ('writeValueWithoutResponse' in this._char) {
+      if (preferWithoutResponse) {
         await this._char.writeValueWithoutResponse(chunk);
       } else {
         await this._char.writeValue(chunk);
