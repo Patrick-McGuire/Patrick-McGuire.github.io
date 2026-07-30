@@ -267,18 +267,26 @@ async function connectBluetooth() {
     ui.unsupported.style.display = 'block';
     return;
   }
+  let device;
   try {
     // acceptAllDevices (rather than a services/name filter) is what's been
     // validated against the real module -- Chrome's filter matching isn't
     // reliable against its advertising data, so the user picks the right
     // device by name (set to ITD-MODEM-<id> by the firmware) from the list.
-    const device = await navigator.bluetooth.requestDevice({
+    device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: [BLE_SERVICE_UUID],
     });
     await openBluetoothDevice(device);
   } catch (e) {
     log('[bluetooth connect failed: ' + e.message + ']', 'err');
+    // If gatt.connect() succeeded but a later setup step (service/characteristic
+    // discovery, startNotifications()) threw, state.bleDevice never got set --
+    // without this, the device stays connected at the OS/Bluetooth level with
+    // nothing in our UI able to see or disconnect it.
+    if (device && device.gatt && device.gatt.connected) {
+      try { device.gatt.disconnect(); } catch (_) {}
+    }
   }
 }
 
