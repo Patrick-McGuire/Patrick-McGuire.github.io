@@ -2,11 +2,12 @@
   <h1>ARS Console</h1>
   <span class="status-pill"><span id="dot" class="dot"></span><span id="status">Disconnected</span></span>
   <button id="connectBtn">Connect</button>
+  <button id="connectBluetoothBtn" class="secondary">Connect via Bluetooth</button>
   <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
 </header>
 
 <div id="unsupported" class="unsupported" style="display:none">
-  Web Serial API is not available in this browser. Use Chrome, Edge, or another Chromium-based browser.
+  Neither the Web Serial nor Web Bluetooth API is available in this browser. Use Chrome, Edge, or another Chromium-based browser.
 </div>
 
 <main>

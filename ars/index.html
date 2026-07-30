@@ -133,11 +133,12 @@
   <h1>ARS Console</h1>
   <span class="status-pill"><span id="dot" class="dot"></span><span id="status">Disconnected</span></span>
   <button id="connectBtn">Connect</button>
+  <button id="connectBluetoothBtn" class="secondary">Connect via Bluetooth</button>
   <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
 </header>
 
 <div id="unsupported" class="unsupported" style="display:none">
-  Web Serial API is not available in this browser. Use Chrome, Edge, or another Chromium-based browser.
+  Neither the Web Serial nor Web Bluetooth API is available in this browser. Use Chrome, Edge, or another Chromium-based browser.
 </div>
 
 <main>
@@ -288,10 +289,91 @@ function formatDecodedAttr(attr) {
   return `${candidates}c/${agreePct}%`;
 }
 
+// --- Bluetooth (BLE) transport -----------------------------------------
+// Device's Bluetooth module is an Ebyte E104-BT5005A running transparent-
+// UART firmware. It exposes one GATT service with two characteristics:
+//   FFF0 service
+//   FFF1 "SLAVE CHANNEL" (read/notify) -- device -> browser
+//   FFF2 "MAST CHANNEL"  (read/write)  -- browser -> device
+// Firmware sets AT+NAME=ITD-MODEM-<id> on boot, but Chrome's service/name
+// filters aren't reliable against this module's advertising data (validated
+// against real hardware), so requestDevice() lists every nearby BLE device
+// and the user picks the right one by name.
+const BLE_SERVICE_UUID = '0000fff0-0000-1000-8000-00805f9b34fb';
+const BLE_NOTIFY_UUID = '0000fff1-0000-1000-8000-00805f9b34fb';
+const BLE_WRITE_UUID = '0000fff2-0000-1000-8000-00805f9b34fb';
+const BLE_WRITE_CHUNK_SIZE = 20;
+
+// Adapts a BLE notify characteristic to the ReadableStreamDefaultReader
+// shape ({read, cancel, releaseLock}) so readLoop() doesn't need to care
+// which transport it's reading from.
+class BleReader {
+  constructor() {
+    this._queue = [];
+    this._waiting = null;
+    this._closed = false;
+  }
+  push(chunk) {
+    if (this._waiting) {
+      const resolve = this._waiting;
+      this._waiting = null;
+      resolve({ value: chunk, done: false });
+    } else {
+      this._queue.push(chunk);
+    }
+  }
+  read() {
+    if (this._queue.length) return Promise.resolve({ value: this._queue.shift(), done: false });
+    if (this._closed) return Promise.resolve({ value: undefined, done: true });
+    return new Promise((resolve) => { this._waiting = resolve; });
+  }
+  cancel() {
+    this._closed = true;
+    if (this._waiting) {
+      const resolve = this._waiting;
+      this._waiting = null;
+      resolve({ value: undefined, done: true });
+    }
+  }
+  releaseLock() {}
+}
+
+// Adapts a BLE write characteristic to the WritableStreamDefaultWriter
+// shape ({write, releaseLock}) used by send(). Chunked to BLE_WRITE_CHUNK_SIZE
+// since a single GATT write is limited to the negotiated ATT MTU.
+//
+// Web Bluetooth allows only one in-flight GATT operation per device --
+// overlapping writeValue() calls throw "GATT operation already in
+// progress". send() callers fire sends back-to-back without awaiting each
+// one (fine for USB, where the WritableStream queues for us), so writes are
+// queued here instead of relying on every call site to serialize itself.
+class BleWriter {
+  constructor(characteristic) {
+    this._char = characteristic;
+    this._chain = Promise.resolve();
+  }
+  write(data) {
+    const run = () => this._writeChunks(data);
+    this._chain = this._chain.then(run, run);
+    return this._chain;
+  }
+  async _writeChunks(data) {
+    for (let offset = 0; offset < data.length; offset += BLE_WRITE_CHUNK_SIZE) {
+      const chunk = data.slice(offset, offset + BLE_WRITE_CHUNK_SIZE);
+      if ('writeValueWithoutResponse' in this._char) {
+        await this._char.writeValueWithoutResponse(chunk);
+      } else {
+        await this._char.writeValue(chunk);
+      }
+    }
+  }
+  releaseLock() {}
+}
+
 const $ = (id) => document.getElementById(id);
 const ui = {
   status: $('status'), dot: $('dot'),
-  connectBtn: $('connectBtn'), disconnectBtn: $('disconnectBtn'),
+  connectBtn: $('connectBtn'), connectBluetoothBtn: $('connectBluetoothBtn'), disconnectBtn: $('disconnectBtn'),
   deviceTime: $('deviceTime'), deviceUnix: $('deviceUnix'), timeDrift: $('timeDrift'),
   readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'), autoSyncTime: $('autoSyncTime'),
   battery: $('battery'), readBatBtn: $('readBatBtn'),
@@ -323,8 +405,16 @@ const state = {
   shouldReconnect: false,
   lastDeviceInfo: null,
   reconnectTimer: null,
+  transport: null,      // 'usb' | 'bluetooth' | null -- which transport is live right now
+  lastTransport: null,  // sticky across disconnects, picks the reconnect strategy
+  bleDevice: null,       // live BluetoothDevice, cleared on disconnect
+  lastBleDevice: null,   // sticky BluetoothDevice, reused to retry the same device
+  ack: { config: 0, time: 0, bat: 0, log: 0 }, // Date.now() of the last time each response tag was seen
 };
 const RECONNECT_INTERVAL_MS = 1000;
+// tag (from "MSG:\tTAG ...") -> state.ack key, for the read-only "getter" queries
+const ACK_KEY_BY_TAG = { CONFIG: 'config', TIME: 'time', BAT: 'bat', LOG: 'log' };
+const GETTER_CMD_BY_ACK_KEY = { config: '--config', time: '--time', bat: '--bat', log: '--log' };
 
 function log(text, cls) {
   const span = document.createElement('span');
@@ -337,7 +427,8 @@ function log(text, cls) {
 function setConnected(connected) {
   ui.status.textContent = connected ? 'Connected' : 'Disconnected';
   ui.dot.classList.toggle('connected', connected);
-  ui.connectBtn.disabled = connected;
+  ui.connectBtn.disabled = connected || !navigator.serial;
+  ui.connectBluetoothBtn.disabled = connected || !navigator.bluetooth;
   ui.disconnectBtn.disabled = !connected;
   const ctrls = [
     ui.readTimeBtn, ui.syncTimeBtn, ui.readBatBtn, ui.readConfigBtn,
@@ -359,6 +450,8 @@ async function openAndStart(port) {
   state.reader = port.readable.getReader();
   state.rxBuf = '';
   state.lastDeviceInfo = port.getInfo();
+  state.transport = 'usb';
+  state.lastTransport = 'usb';
   state.shouldReconnect = true;
   setConnected(true);
   log('[connected]', 'tx');
@@ -366,10 +459,7 @@ async function openAndStart(port) {
   // Initial pull
   setTimeout(() => {
     if (ui.autoSyncTime.checked) syncTimeToNow();
-    send('--config');
-    send('--time');
-    send('--bat');
-    send('--log');
+    requestInitialData();
   }, 100);
 }
 
@@ -383,6 +473,71 @@ async function connect() {
     await openAndStart(port);
   } catch (e) {
     log('[connect failed: ' + e.message + ']', 'err');
+  }
+}
+
+function requestInitialData() {
+  state.ack = { config: 0, time: 0, bat: 0, log: 0 };
+  // Fired concurrently -- each retries independently until acked (see
+  // sendUntilAcked); the underlying writer already serializes the actual
+  // wire sends, so these don't race each other.
+  for (const ackKey of Object.keys(GETTER_CMD_BY_ACK_KEY)) {
+    sendUntilAcked(ackKey);
+  }
+}
+
+async function openBluetoothDevice(device) {
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+  const notifyChar = await service.getCharacteristic(BLE_NOTIFY_UUID);
+  const writeChar = await service.getCharacteristic(BLE_WRITE_UUID);
+
+  const bleReader = new BleReader();
+  notifyChar.addEventListener('characteristicvaluechanged', (e) => {
+    const v = e.target.value;
+    bleReader.push(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  });
+  await notifyChar.startNotifications();
+
+  // Reused on auto-reconnect (same device object) -- avoid stacking listeners.
+  device.removeEventListener('gattserverdisconnected', handleConnectionLost);
+  device.addEventListener('gattserverdisconnected', handleConnectionLost);
+
+  state.port = null;
+  state.bleDevice = device;
+  state.lastBleDevice = device;
+  state.reader = bleReader;
+  state.writer = new BleWriter(writeChar);
+  state.rxBuf = '';
+  state.transport = 'bluetooth';
+  state.lastTransport = 'bluetooth';
+  state.shouldReconnect = true;
+  setConnected(true);
+  log('[connected via bluetooth: ' + (device.name || device.id) + ']', 'tx');
+  state.readLoop = readLoop();
+  setTimeout(() => {
+    if (ui.autoSyncTime.checked) syncTimeToNow();
+    requestInitialData();
+  }, 100);
+}
+
+async function connectBluetooth() {
+  if (!navigator.bluetooth) {
+    ui.unsupported.style.display = 'block';
+    return;
+  }
+  try {
+    // acceptAllDevices (rather than a services/name filter) is what's been
+    // validated against the real module -- Chrome's filter matching isn't
+    // reliable against its advertising data, so the user picks the right
+    // device by name (set to ITD-MODEM-<id> by the firmware) from the list.
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [BLE_SERVICE_UUID],
+    });
+    await openBluetoothDevice(device);
+  } catch (e) {
+    log('[bluetooth connect failed: ' + e.message + ']', 'err');
   }
 }
 
@@ -400,25 +555,35 @@ async function disconnect() {
     if (state.writer) {
       try { state.writer.releaseLock(); } catch (_) {}
     }
-    if (state.port) {
+    if (state.transport === 'usb' && state.port) {
       try { await state.port.close(); } catch (_) {}
+    } else if (state.transport === 'bluetooth' && state.bleDevice) {
+      try { state.bleDevice.removeEventListener('gattserverdisconnected', handleConnectionLost); } catch (_) {}
+      try { if (state.bleDevice.gatt.connected) state.bleDevice.gatt.disconnect(); } catch (_) {}
     }
   } catch (e) {
     log('[disconnect error: ' + e.message + ']', 'err');
   } finally {
-    state.port = state.reader = state.writer = null;
+    state.port = state.reader = state.writer = state.bleDevice = null;
+    state.transport = null;
     setConnected(false);
     log('[disconnected]', 'tx');
   }
 }
 
-// Called when the connection is lost involuntarily (cable unplugged, device reset, etc.)
+// Called when the connection is lost involuntarily (cable unplugged, device
+// out of range, reset, etc.) -- also fires as the 'gattserverdisconnected'
+// listener for the Bluetooth path.
 function handleConnectionLost() {
   if (!state.port && !state.reader && !state.writer) return;
   log('[connection lost]', 'warn');
   try { state.reader && state.reader.releaseLock(); } catch (_) {}
   try { state.writer && state.writer.releaseLock(); } catch (_) {}
-  state.port = state.reader = state.writer = null;
+  if (state.bleDevice) {
+    try { state.bleDevice.removeEventListener('gattserverdisconnected', handleConnectionLost); } catch (_) {}
+  }
+  state.port = state.reader = state.writer = state.bleDevice = null;
+  state.transport = null;
   state.rxBuf = '';
   setConnected(false);
   if (state.shouldReconnect) scheduleReconnect();
@@ -433,7 +598,20 @@ function scheduleReconnect() {
 }
 
 async function tryReconnect() {
-  if (!state.shouldReconnect || state.port) return;
+  if (!state.shouldReconnect || state.reader) return;
+  if (state.lastTransport === 'bluetooth') {
+    if (!state.lastBleDevice) {
+      scheduleReconnect();
+      return;
+    }
+    try {
+      log('[reconnecting...]', 'tx');
+      await openBluetoothDevice(state.lastBleDevice);
+    } catch (_) {
+      scheduleReconnect();
+    }
+    return;
+  }
   try {
     const ports = await navigator.serial.getPorts();
     const target = ports.find(p => {
@@ -470,7 +648,7 @@ async function readLoop() {
       }
     }
   } catch (e) {
-    if (state.port) log('[read error: ' + e.message + ']', 'err');
+    if (state.transport) log('[read error: ' + e.message + ']', 'err');
   } finally {
     // The reader returned done or threw — almost always means the device went away.
     // Don't fire if we're already cleaned up (user-initiated disconnect path).
@@ -487,6 +665,24 @@ async function send(cmd) {
   } catch (e) {
     log('[send error: ' + e.message + ']', 'err');
   }
+}
+
+// Retries a read-only "getter" command (--config/--time/--bat/--log) until
+// its response tag is actually seen, rather than assuming one send == one
+// answer. Needed because Bluetooth's raw UART link can drop/garble a command
+// if it lands while the device is mid-decode (see IntegratedParser.h);
+// resending a read-only query is always safe. No-op for USB, which doesn't
+// have this failure mode -- retries there just never trigger past attempt 1.
+async function sendUntilAcked(ackKey, { retries = 6, intervalMs = 1000 } = {}) {
+  const cmd = GETTER_CMD_BY_ACK_KEY[ackKey];
+  for (let attempt = 0; attempt < retries; attempt++) {
+    if (!state.writer) return false;
+    const requestedAt = Date.now();
+    await send(cmd);
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    if (state.ack[ackKey] >= requestedAt) return true;
+  }
+  return false;
 }
 
 function syncTimeToNow() {
@@ -530,6 +726,8 @@ function handleLine(line) {
     case 'TRANSMIT': handleTransmit(kv); break;
     case 'TRANSMITDONE': handleTransmitDone(); break;
   }
+  const ackKey = ACK_KEY_BY_TAG[tag];
+  if (ackKey) state.ack[ackKey] = Date.now();
 }
 
 function handleTransmit(kv) {
@@ -717,41 +915,42 @@ function downloadCsv() {
 
 // Wire up UI
 ui.connectBtn.addEventListener('click', connect);
+ui.connectBluetoothBtn.addEventListener('click', connectBluetooth);
 ui.disconnectBtn.addEventListener('click', disconnect);
-ui.readTimeBtn.addEventListener('click', () => send('--time'));
+ui.readTimeBtn.addEventListener('click', () => sendUntilAcked('time'));
 ui.syncTimeBtn.addEventListener('click', syncTimeToNow);
-ui.readBatBtn.addEventListener('click', () => send('--bat'));
-ui.readConfigBtn.addEventListener('click', () => send('--config'));
+ui.readBatBtn.addEventListener('click', () => sendUntilAcked('bat'));
+ui.readConfigBtn.addEventListener('click', () => sendUntilAcked('config'));
 ui.setIdBtn.addEventListener('click', () => {
   const v = parseInt(ui.cfgId.value, 10);
   if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid ID');
   send('--id -set ' + v);
-  setTimeout(() => send('--config'), 100);
+  setTimeout(() => sendUntilAcked('config'), 100);
 });
 ui.setSleepBtn.addEventListener('click', () => {
   const v = parseInt(ui.cfgSleep.value, 10);
   if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid sleep');
   send('--sleep -set ' + v);
-  setTimeout(() => send('--config'), 100);
+  setTimeout(() => sendUntilAcked('config'), 100);
 });
 ui.setAwakeBtn.addEventListener('click', () => {
   const v = parseInt(ui.cfgAwake.value, 10);
   if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid awake');
   send('--awake -set ' + v);
-  setTimeout(() => send('--config'), 100);
+  setTimeout(() => sendUntilAcked('config'), 100);
 });
 ui.setStateBtn.addEventListener('click', () => {
   const v = parseInt(ui.cfgState.value, 10);
   if (!Number.isFinite(v) || v < 0 || v > 2) return alert('Invalid state');
   send('--state -set ' + v);
-  setTimeout(() => send('--config'), 100);
+  setTimeout(() => sendUntilAcked('config'), 100);
 });
 ui.setEventsBtn.addEventListener('click', () => {
   const mask = readEventsMaskFromUi();
   send('--events -mask ' + mask);
-  setTimeout(() => send('--config'), 100);
+  setTimeout(() => sendUntilAcked('config'), 100);
 });
-ui.readLogCountBtn.addEventListener('click', () => send('--log'));
+ui.readLogCountBtn.addEventListener('click', () => sendUntilAcked('log'));
 ui.dumpLogBtn.addEventListener('click', () => {
   state.logEntries = [];
   ui.logBody.innerHTML = '';
@@ -770,7 +969,7 @@ ui.clearDeviceLogBtn.addEventListener('click', () => {
   if (!confirm('Erase all event log entries on the device? This cannot be undone.')) return;
   send('--log -clear');
   // Clearing the EEPROM takes ~1-2s on device; refresh count after a delay
-  setTimeout(() => send('--log'), 2500);
+  setTimeout(() => sendUntilAcked('log'), 2500);
 });
 ui.consoleForm.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -788,10 +987,12 @@ ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; 
 
 buildEventCheckboxes();
 
-if (!navigator.serial) {
+if (!navigator.serial && !navigator.bluetooth) {
   ui.unsupported.style.display = 'block';
-  ui.connectBtn.disabled = true;
-} else {
+}
+ui.connectBtn.disabled = !navigator.serial;
+ui.connectBluetoothBtn.disabled = !navigator.bluetooth;
+if (navigator.serial) {
   navigator.serial.addEventListener('disconnect', (e) => {
     if (e.target === state.port) handleConnectionLost();
   });
