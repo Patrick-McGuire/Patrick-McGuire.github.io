@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AP Reader</title>
+<style>
+  :root{
+    --bg:#faf7f2; --fg:#1c1c1c; --muted:#6b6b6b; --accent:#c0392b; --card:#fff; --border:#e2ddd3;
+  }
+  html.dark{
+    --bg:#161513; --fg:#eae6df; --muted:#9c9690; --accent:#e0685c; --card:#201f1d; --border:#33312c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  header{
+    position:sticky; top:0; z-index:10;
+    background:var(--card); border-bottom:1px solid var(--border);
+    padding:10px 12px; display:flex; flex-direction:column; gap:8px;
+  }
+  .row{display:flex; gap:8px; align-items:center;}
+  input[type=text]{
+    flex:1; min-width:0; padding:10px 12px; font-size:16px;
+    border:1px solid var(--border); border-radius:8px;
+    background:var(--bg); color:var(--fg);
+  }
+  button{
+    padding:10px 14px; font-size:15px; border:1px solid var(--border);
+    border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer;
+  }
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .brand{ font-weight:700; font-size:1.1em; letter-spacing:.02em; margin-right:4px; }
+  .tools{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tools button{ padding:6px 10px; font-size:13px; }
+  #recent{ display:flex; gap:6px; overflow-x:auto; padding-top:2px; }
+  #recent span{
+    white-space:nowrap; font-size:12px; color:var(--muted);
+    border:1px solid var(--border); border-radius:999px; padding:4px 10px; cursor:pointer;
+  }
+  main{ max-width:700px; margin:0 auto; padding:20px 18px 80px; }
+  #status{ color:var(--muted); font-size:14px; padding:20px 0; text-align:center; }
+  .hidden{ display:none !important; }
+
+  /* ---- home / headline digest ---- */
+  .section-block{ margin-bottom:26px; }
+  .section-title{
+    font-size:0.8em; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 10px; padding-bottom:6px; border-bottom:2px solid var(--border);
+  }
+  .headline{
+    display:block; padding:10px 0; border-bottom:1px solid var(--border);
+    color:var(--fg); text-decoration:none; font-size:1.05em; line-height:1.4; cursor:pointer;
+  }
+  .headline:last-child{ border-bottom:none; }
+  .headline:active{ opacity:0.6; }
+
+  /* ---- article view ---- */
+  #article h1{ font-size:1.6em; line-height:1.25; margin:0 0 6px; }
+  #article .meta{ color:var(--muted); font-size:13px; margin-bottom:18px; }
+  #article .meta a{ color:var(--muted); }
+  #article{ font-size:var(--fs,18px); line-height:1.65; }
+  #article p{ margin:0 0 1.1em; }
+  #article h2{ font-size:1.25em; margin:1.4em 0 .5em; }
+  #article h3{ font-size:1.1em; margin:1.2em 0 .4em; }
+  #article img{ max-width:100%; height:auto; border-radius:6px; display:block; margin:1em 0; }
+  #article .caption{ font-size:.85em; color:var(--muted); margin:-0.6em 0 1.3em; }
+  #article a{ color:var(--accent); text-decoration:underline; word-break:break-word; }
+  #article ul,#article ol{ padding-left:1.3em; margin:0 0 1.1em; }
+  #article li{ margin-bottom:.4em; }
+  #article blockquote{ margin:0 0 1.1em; padding-left:.9em; border-left:3px solid var(--accent); color:var(--muted); }
+  .article-footer{ margin-top:30px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted); }
+  .article-footer a{ color:var(--accent); }
+  .backbar{ margin-bottom:14px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <span class="brand">AP Reader</span>
+    <button id="homeBtn" title="Headlines">🏠</button>
+    <button id="refreshBtn" title="Refresh headlines">⟳</button>
+    <span style="flex:1"></span>
+    <button id="darkBtn">🌙</button>
+  </div>
+  <div class="row hidden" id="urlRow">
+    <input type="text" id="url" placeholder="Or paste any AP News link…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <button class="primary" id="loadBtn">Go</button>
+  </div>
+  <div class="tools">
+    <button id="toggleUrlBtn">Paste a link</button>
+    <button id="fontMinus">A−</button>
+    <button id="fontPlus">A+</button>
+  </div>
+  <div id="recent"></div>
+</header>
+
+<main>
+  <div id="status" class="hidden"></div>
+  <div id="home"></div>
+  <article id="article" class="hidden"></article>
+</main>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const urlInput = $('url'), statusEl = $('status'), articleEl = $('article'), homeEl = $('home'), recentEl = $('recent');
+
+  // ---------- theme / font persistence ----------
+  const root = document.documentElement;
+  let fontSize = parseInt(localStorage.getItem('apr_font') || '18', 10);
+  document.body.style.setProperty('--fs', fontSize + 'px');
+  if (localStorage.getItem('apr_dark') === '1' ||
+      (!localStorage.getItem('apr_dark') && matchMedia('(prefers-color-scheme: dark)').matches)) {
+    root.classList.add('dark');
+  }
+  function applyFont(){ document.body.style.setProperty('--fs', fontSize + 'px'); localStorage.setItem('apr_font', fontSize); }
+  $('fontPlus').onclick = () => { fontSize = Math.min(fontSize + 2, 30); applyFont(); };
+  $('fontMinus').onclick = () => { fontSize = Math.max(fontSize - 2, 14); applyFont(); };
+  $('darkBtn').onclick = () => {
+    root.classList.toggle('dark');
+    localStorage.setItem('apr_dark', root.classList.contains('dark') ? '1' : '0');
+  };
+  $('toggleUrlBtn').onclick = () => { $('urlRow').classList.toggle('hidden'); if(!$('urlRow').classList.contains('hidden')) urlInput.focus(); };
+  $('homeBtn').onclick = () => showHome();
+  $('refreshBtn').onclick = () => fetchHome(true);
+
+  // ---------- recent list ----------
+  function getRecent(){ try { return JSON.parse(localStorage.getItem('apr_recent') || '[]'); } catch(e){ return []; } }
+  function saveRecent(u, title){
+    let list = getRecent().filter(x => x.u !== u);
+    list.unshift({u, title: title || u});
+    list = list.slice(0, 8);
+    localStorage.setItem('apr_recent', JSON.stringify(list));
+    renderRecent();
+  }
+  function renderRecent(){
+    const list = getRecent();
+    recentEl.innerHTML = '';
+    list.forEach(item => {
+      const s = document.createElement('span');
+      s.textContent = item.title.length > 32 ? item.title.slice(0,32)+'…' : item.title;
+      s.onclick = () => loadArticle(item.u, item.title);
+      recentEl.appendChild(s);
+    });
+  }
+  renderRecent();
+
+  // ---------- markdown-ish rendering ----------
+  function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escapeAttr(s){ return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function inline(s){
+    s = escapeHtml(s);
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+      (_, alt, src) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy">`);
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+      (_, text, href) => `<a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`);
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    return s;
+  }
+  function mdToHtml(md){
+    const lines = md.split('\n');
+    let html = '', i = 0, para = [];
+    function flushPara(){
+      if (para.length){
+        const joined = para.join(' ').trim();
+        // if this paragraph is just an image caption immediately after a lone image, style small
+        html += `<p>${inline(joined)}</p>`;
+        para = [];
+      }
+    }
+    while (i < lines.length){
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (trimmed === ''){ flushPara(); i++; continue; }
+      const h = trimmed.match(/^(#{1,3})\s+(.*)$/);
+      if (h){
+        flushPara();
+        const level = Math.min(h[1].length + 1, 3);
+        html += `<h${level}>${inline(h[2])}</h${level}>`;
+        i++; continue;
+      }
+      if (/^(\*|-)\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)){
+        flushPara();
+        const ordered = /^\d+\.\s+/.test(trimmed);
+        const tag = ordered ? 'ol' : 'ul';
+        let items = [];
+        while (i < lines.length && (/^(\*|-)\s+/.test(lines[i].trim()) || /^\d+\.\s+/.test(lines[i].trim()))){
+          items.push(lines[i].trim().replace(/^(\*|-)\s+/, '').replace(/^\d+\.\s+/, ''));
+          i++;
+        }
+        html += `<${tag}>` + items.map(it => `<li>${inline(it)}</li>`).join('') + `</${tag}>`;
+        continue;
+      }
+      if (/^>\s?/.test(trimmed)){
+        flushPara();
+        let quote = [];
+        while (i < lines.length && /^>\s?/.test(lines[i].trim())){
+          quote.push(lines[i].trim().replace(/^>\s?/, ''));
+          i++;
+        }
+        html += `<blockquote>${inline(quote.join(' '))}</blockquote>`;
+        continue;
+      }
+      para.push(trimmed);
+      i++;
+    }
+    flushPara();
+    return html;
+  }
+
+  // ---------- article extraction (strips AP's nav/ad/related-story cruft) ----------
+  function extractArticle(raw){
+    const titleMatch = raw.match(/^Title:\s*(.+)$/m);
+    const urlMatch = raw.match(/^URL Source:\s*(.+)$/m);
+    const publishedMatch = raw.match(/^Published Time:\s*(.+)$/m);
+    const bodyIdx = raw.indexOf('Markdown Content:');
+    const md = bodyIdx !== -1 ? raw.slice(bodyIdx + 'Markdown Content:'.length) : raw;
+
+    const bylineMatch = md.match(/\n ?By\[([^\]]+)\]\(([^)]+)\)([^\n]*)/);
+    let startIdx = 0;
+    if (bylineMatch){
+      const heroIdx = md.lastIndexOf('![Image', bylineMatch.index);
+      startIdx = heroIdx !== -1 ? heroIdx : bylineMatch.index;
+    } else {
+      const lastNl = md.lastIndexOf('\nNewsletters');
+      if (lastNl !== -1) startIdx = lastNl;
+    }
+
+    let endIdx = md.length;
+    const mostReadIdx = md.search(/\n\s*Most read\s*\n/i);
+    if (mostReadIdx !== -1 && mostReadIdx > startIdx) endIdx = mostReadIdx;
+
+    let body = md.slice(startIdx, endIdx);
+    // headless-rendered photo galleries leave unfetchable blob: image URLs behind
+    body = body.replace(/!\[([^\]]*)\]\(blob:[^)]*\)/g, '');
+    const blocks = body.split(/\n\s*\n/);
+    const socialNames = /^(facebook|x|linkedin|bluesky|flipboard|pinterest|reddit|email|instagram|twitter)$/i;
+    const junkLine = /^(Share|Menu|Comments|Print|Copy Link copied|Add AP News on Google.*|Related Stories|Read More|Email address|Sign up)$/i;
+
+    const kept = [];
+    for (let i = 0; i < blocks.length; i++){
+      let b = blocks[i].trim();
+      if (!b) continue;
+      if (/^\d+\s*of\s*\d+\|?\s*$/i.test(b)) continue; // gallery "N of M" indicator
+      b = b.replace(/^\d+\s*of\s*\d+\|\s*\n?/i, '').trim(); // strip leading gallery counter from caption
+      if (kept.length && kept[kept.length - 1].trim() === b) continue; // dedup repeated caption
+      if (/^\[\]\(https?:\/\/[^)]*\)$/.test(b)) continue;
+      if (/^\[\d+\]\(https?:\/\/apnews\.com\/article\/[^)]+\)$/.test(b)) continue;
+      if (/^\d+\s*MIN READ$/i.test(b)) continue;
+      if (/^ ?By\[[^\]]+\]\([^)]+\).*$/.test(b)) continue;
+      if (/^Updated\s+/.test(b)) continue;
+      if (/^\[Leer en español\]/i.test(b)) continue;
+      if (/^!\[Image \d+: Comments\]/i.test(b)) continue;
+      if (junkLine.test(b)) continue;
+      if (/^-\s*\[x\]\s*By checking this box/i.test(b)) continue;
+      if (/^\*\*Sign up for /i.test(b)) continue;
+      if (/^\[!\[Image[^\]]*\]\([^)]+\)\]\(https?:\/\/apnews\.com\/article\//.test(b)){
+        let j = i + 1;
+        if (j < blocks.length && /^\[[^\]]+\]\(https?:\/\/apnews\.com\/article\/[^)]+\)$/.test(blocks[j].trim())) j++;
+        if (j < blocks.length && /^\d+\s*MIN READ$/i.test(blocks[j].trim())) j++;
+        if (j < blocks.length && /^\[\d+\]\(https?:\/\/apnews\.com\/article\/[^)]+\)$/.test(blocks[j].trim())) j++;
+        i = j - 1;
+        continue;
+      }
+      const lines = b.split('\n').map(l=>l.replace(/^\*\s*/,'').trim()).filter(Boolean);
+      if (lines.length >= 2){
+        const junkyCount = lines.filter(l => {
+          const m = l.match(/^\[([^\]]+)\]\(/);
+          if (m) return socialNames.test(m[1]);
+          return /^(Copy Link copied|Print)$/i.test(l);
+        }).length;
+        if (junkyCount / lines.length >= 0.7) continue;
+      }
+      kept.push(b);
+    }
+
+    return {
+      title: titleMatch ? titleMatch[1].trim() : null,
+      sourceUrl: urlMatch ? urlMatch[1].trim() : null,
+      byline: bylineMatch ? (bylineMatch[1] + (bylineMatch[3] || '')).replace(/\s+/g, ' ').trim() : null,
+      published: publishedMatch ? publishedMatch[1].trim() : null,
+      body: kept.join('\n\n')
+    };
+  }
+
+  function formatPublished(iso){
+    try {
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      return d.toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+    } catch(e){ return iso; }
+  }
+
+  // ---------- view switching ----------
+  function showHome(){
+    articleEl.classList.add('hidden');
+    homeEl.classList.remove('hidden');
+    window.scrollTo(0,0);
+    if (!homeEl.dataset.loaded) fetchHome(false);
+  }
+  function showArticleView(){
+    homeEl.classList.add('hidden');
+    articleEl.classList.remove('hidden');
+  }
+
+  // ---------- home digest ----------
+  const HOME_CACHE_KEY = 'apr_home_cache';
+  const HOME_TTL_MS = 15 * 60 * 1000;
+
+  function parseHomeSections(raw){
+    const bodyIdx = raw.indexOf('Markdown Content:');
+    const md = bodyIdx !== -1 ? raw.slice(bodyIdx + 'Markdown Content:'.length) : raw;
+    const re = /\[([^\]]+)\]\((https:\/\/apnews\.com\/[^\)]*)\)\n\nSECTIONS[^\n]*\n\nTOP STORIES\s*\n((?:\s*\*\s*\[[^\]]+\]\([^\)]+\)\s*\n?)+)/g;
+    let m;
+    const seen = new Set();
+    const sections = [];
+    while ((m = re.exec(md)) !== null){
+      const name = m[1].trim();
+      const url = m[2].trim();
+      if (seen.has(url)) continue;
+      if (/españ|noticias/i.test(name) || /noticias/i.test(url)) continue;
+      seen.add(url);
+      const headlineRe = /\[([^\]]+)\]\(([^\)]+)\)/g;
+      let hm; const heads = [];
+      while ((hm = headlineRe.exec(m[3])) !== null) heads.push({ title: hm[1], url: hm[2] });
+      if (heads.length) sections.push({ name, url, heads });
+    }
+    return sections;
+  }
+
+  function renderHome(sections){
+    sections = sections.filter(sec => sec.heads && sec.heads.length > 0);
+    if (!sections.length){
+      homeEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px 0;">Could not load headlines. Try refreshing.</div>';
+      return;
+    }
+    homeEl.innerHTML = sections.map(sec => `
+      <div class="section-block">
+        <h2 class="section-title">${escapeHtml(sec.name)}</h2>
+        ${sec.heads.map(h => `<a class="headline" data-url="${escapeAttr(h.url)}" data-title="${escapeAttr(h.title)}">${escapeHtml(h.title)}</a>`).join('')}
+      </div>
+    `).join('');
+    homeEl.querySelectorAll('.headline').forEach(el => {
+      el.addEventListener('click', () => loadArticle(el.dataset.url, el.dataset.title));
+    });
+    homeEl.dataset.loaded = '1';
+  }
+
+  // Bing News RSS: supplements AP's own nav (which only exposes 3-4 headlines
+  // per section) with a much bigger, freshly-dated set of real, direct AP
+  // article links — no redirect-token resolution needed, unlike Google News RSS.
+  const SECTION_QUERY = {
+    'https://apnews.com/world-news': 'world',
+    'https://apnews.com/us-news': 'US news',
+    'https://apnews.com/politics': 'politics',
+    'https://apnews.com/sports': 'sports',
+    'https://apnews.com/entertainment': 'entertainment',
+    'https://apnews.com/business': 'business economy',
+    'https://apnews.com/hub/be-well': 'health wellness',
+    'https://apnews.com/climate-and-environment': 'climate environment',
+    'https://apnews.com/technology': 'technology'
+  };
+  const SECTION_CAP = 14;
+
+  function parseBingItems(xmlText){
+    let doc;
+    try { doc = new DOMParser().parseFromString(xmlText, 'text/xml'); } catch(e){ return []; }
+    const items = Array.from(doc.querySelectorAll('item'));
+    return items.map(it => {
+      const link = it.querySelector('link')?.textContent || '';
+      let url = link;
+      try { const u = new URL(link); const p = u.searchParams.get('url'); if (p) url = p; } catch(e){}
+      return { title: (it.querySelector('title')?.textContent || '').trim(), url };
+    }).filter(x => x.title && /^https:\/\/apnews\.com\/article\//.test(x.url));
+  }
+
+  async function fetchBingHeadlines(query){
+    try {
+      const q = query ? ('site:apnews.com ' + query) : 'site:apnews.com';
+      const resp = await fetch('https://www.bing.com/news/search?q=' + encodeURIComponent(q) + '&format=rss');
+      if (!resp.ok) return [];
+      return parseBingItems(await resp.text());
+    } catch (e){ return []; }
+  }
+
+  async function fetchHome(force){
+    if (!force){
+      try {
+        const cached = JSON.parse(localStorage.getItem(HOME_CACHE_KEY) || 'null');
+        if (cached && (Date.now() - cached.ts) < HOME_TTL_MS){
+          renderHome(cached.sections);
+          return;
+        }
+      } catch(e){}
+    }
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = 'Loading headlines…';
+    homeEl.classList.remove('hidden');
+    articleEl.classList.add('hidden');
+    try {
+      const resp = await fetch('https://r.jina.ai/https://apnews.com');
+      if (!resp.ok) throw new Error('Fetch failed (' + resp.status + ')');
+      const raw = await resp.text();
+      const sections = parseHomeSections(raw);
+
+      statusEl.textContent = 'Loading more headlines…';
+      const seen = new Set();
+      sections.forEach(s => s.heads.forEach(h => seen.add(h.url)));
+
+      const [topExtra, ...sectionExtras] = await Promise.all([
+        fetchBingHeadlines(''),
+        ...sections.map(s => fetchBingHeadlines(SECTION_QUERY[s.url] || s.name))
+      ]);
+
+      const topHeads = [];
+      for (const item of topExtra){
+        if (seen.has(item.url)) continue;
+        seen.add(item.url);
+        topHeads.push(item);
+        if (topHeads.length >= SECTION_CAP) break;
+      }
+
+      sections.forEach((s, i) => {
+        for (const item of sectionExtras[i]){
+          if (s.heads.length >= SECTION_CAP) break;
+          if (seen.has(item.url)) continue;
+          seen.add(item.url);
+          s.heads.push(item);
+        }
+      });
+
+      const allSections = topHeads.length ? [{ name: 'Top Stories', url: 'https://apnews.com', heads: topHeads }, ...sections] : sections;
+
+      localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ ts: Date.now(), sections: allSections }));
+      renderHome(allSections);
+      statusEl.classList.add('hidden');
+    } catch (err){
+      statusEl.textContent = 'Could not load headlines (' + err.message + ').';
+    }
+  }
+
+  // ---------- article loading ----------
+  async function loadArticle(rawUrl, knownTitle){
+    let target = (rawUrl || '').trim();
+    if (!target) return;
+    if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+
+    showArticleView();
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = 'Loading article…';
+    articleEl.innerHTML = '';
+    window.scrollTo(0,0);
+
+    try {
+      const resp = await fetch('https://r.jina.ai/' + target);
+      if (!resp.ok) throw new Error('Fetch failed (' + resp.status + ')');
+      const raw = await resp.text();
+      const { title, sourceUrl, byline, published, body } = extractArticle(raw);
+      const html = mdToHtml(body);
+      const finalUrl = sourceUrl || target;
+      const finalTitle = title || knownTitle || 'Untitled article';
+
+      const metaParts = [];
+      if (byline) metaParts.push('By ' + escapeHtml(byline));
+      if (published) metaParts.push(escapeHtml(formatPublished(published)));
+      metaParts.push(`<a href="${escapeAttr(finalUrl)}" target="_blank" rel="noopener noreferrer">Original on AP News</a>`);
+
+      articleEl.innerHTML =
+        `<div class="backbar"><button id="backBtn">← Headlines</button></div>` +
+        `<h1>${escapeHtml(finalTitle)}</h1>` +
+        `<div class="meta">${metaParts.join(' · ')}</div>` +
+        html +
+        `<footer class="article-footer">Fetched via r.jina.ai reader proxy · <a href="${escapeAttr(finalUrl)}" target="_blank" rel="noopener noreferrer">View original</a></footer>`;
+
+      $('backBtn').onclick = showHome;
+      statusEl.classList.add('hidden');
+      saveRecent(target, finalTitle);
+    } catch (err){
+      articleEl.innerHTML = `<div class="backbar"><button id="backBtn">← Headlines</button></div>`;
+      $('backBtn').onclick = showHome;
+      statusEl.textContent = 'Could not load that article (' + err.message + '). Try opening it directly, or check the link.';
+    }
+  }
+
+  $('loadBtn').onclick = () => loadArticle(urlInput.value);
+  urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadArticle(urlInput.value); });
+
+  showHome();
+})();
+</script>
+</body>
+</html>
