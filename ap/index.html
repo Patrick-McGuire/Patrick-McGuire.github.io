@@ -57,6 +57,12 @@
   }
   .headline:last-child{ border-bottom:none; }
   .headline:active{ opacity:0.6; }
+  .loadMoreBtn{
+    display:block; width:100%; margin-top:10px; padding:9px;
+    font-size:13px; color:var(--accent); background:transparent;
+    border:1px dashed var(--border); border-radius:8px; cursor:pointer;
+  }
+  .loadMoreBtn:active{ opacity:0.6; }
 
   /* ---- article view ---- */
   #article h1{ font-size:1.6em; line-height:1.25; margin:0 0 6px; }
@@ -333,22 +339,41 @@
     return sections;
   }
 
+  let currentSections = [];
+  const LOAD_MORE_BATCH = 10;
+
   function renderHome(sections){
     sections = sections.filter(sec => sec.heads && sec.heads.length > 0);
+    currentSections = sections;
     if (!sections.length){
       homeEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px 0;">Could not load headlines. Try refreshing.</div>';
       return;
     }
-    homeEl.innerHTML = sections.map(sec => `
+    homeEl.innerHTML = sections.map((sec, i) => `
       <div class="section-block">
         <h2 class="section-title">${escapeHtml(sec.name)}</h2>
         ${sec.heads.map(h => `<a class="headline" data-url="${escapeAttr(h.url)}" data-title="${escapeAttr(h.title)}">${escapeHtml(h.title)}</a>`).join('')}
+        ${sec.pool && sec.pool.length ? `<button class="loadMoreBtn" data-section-index="${i}">Load more headlines</button>` : ''}
       </div>
     `).join('');
     homeEl.querySelectorAll('.headline').forEach(el => {
       el.addEventListener('click', () => loadArticle(el.dataset.url, el.dataset.title));
     });
+    homeEl.querySelectorAll('.loadMoreBtn').forEach(el => {
+      el.addEventListener('click', () => loadMoreHeadlines(Number(el.dataset.sectionIndex)));
+    });
     homeEl.dataset.loaded = '1';
+  }
+
+  function loadMoreHeadlines(index){
+    const sec = currentSections[index];
+    if (!sec || !sec.pool || !sec.pool.length) return;
+    const scrollY = window.scrollY;
+    const next = sec.pool.splice(0, LOAD_MORE_BATCH);
+    sec.heads.push(...next);
+    renderHome(currentSections);
+    window.scrollTo(0, scrollY);
+    try { localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ ts: Date.now(), sections: currentSections })); } catch(e){}
   }
 
   // Bing News RSS: supplements AP's own nav (which only exposes 3-4 headlines
@@ -367,24 +392,29 @@
   };
   const SECTION_CAP = 14;
 
-  function parseBingItems(xmlText){
-    let doc;
-    try { doc = new DOMParser().parseFromString(xmlText, 'text/xml'); } catch(e){ return []; }
-    const items = Array.from(doc.querySelectorAll('item'));
-    return items.map(it => {
-      const link = it.querySelector('link')?.textContent || '';
+  // Bing's RSS endpoint sends no CORS headers, so fetching it directly from a
+  // file:// page is silently blocked by the browser. Routing it through the
+  // r.jina.ai reader proxy (which does reflect CORS for null/file origins)
+  // gets the feed rendered as markdown instead of raw XML, so we parse that.
+  function parseBingMarkdown(text){
+    const re = /^### \[([^\]]+)\]\((https?:\/\/www\.bing\.com\/news\/apiclick[^)]+)\)$/gm;
+    let m; const items = [];
+    while ((m = re.exec(text)) !== null){
+      const link = m[2];
       let url = link;
       try { const u = new URL(link); const p = u.searchParams.get('url'); if (p) url = p; } catch(e){}
-      return { title: (it.querySelector('title')?.textContent || '').trim(), url };
-    }).filter(x => x.title && /^https:\/\/apnews\.com\/article\//.test(x.url));
+      items.push({ title: m[1].trim(), url });
+    }
+    return items.filter(x => x.title && /^https:\/\/apnews\.com\/article\//.test(x.url));
   }
 
   async function fetchBingHeadlines(query){
     try {
       const q = query ? ('site:apnews.com ' + query) : 'site:apnews.com';
-      const resp = await fetch('https://www.bing.com/news/search?q=' + encodeURIComponent(q) + '&format=rss');
+      const bingUrl = 'https://www.bing.com/news/search?q=' + encodeURIComponent(q) + '&format=rss';
+      const resp = await fetch('https://r.jina.ai/' + bingUrl);
       if (!resp.ok) return [];
-      return parseBingItems(await resp.text());
+      return parseBingMarkdown(await resp.text());
     } catch (e){ return []; }
   }
 
@@ -417,24 +447,23 @@
         ...sections.map(s => fetchBingHeadlines(SECTION_QUERY[s.url] || s.name))
       ]);
 
-      const topHeads = [];
+      const topHeads = [], topPool = [];
       for (const item of topExtra){
         if (seen.has(item.url)) continue;
         seen.add(item.url);
-        topHeads.push(item);
-        if (topHeads.length >= SECTION_CAP) break;
+        (topHeads.length < SECTION_CAP ? topHeads : topPool).push(item);
       }
 
       sections.forEach((s, i) => {
+        s.pool = [];
         for (const item of sectionExtras[i]){
-          if (s.heads.length >= SECTION_CAP) break;
           if (seen.has(item.url)) continue;
           seen.add(item.url);
-          s.heads.push(item);
+          (s.heads.length < SECTION_CAP ? s.heads : s.pool).push(item);
         }
       });
 
-      const allSections = topHeads.length ? [{ name: 'Top Stories', url: 'https://apnews.com', heads: topHeads }, ...sections] : sections;
+      const allSections = topHeads.length ? [{ name: 'Top Stories', url: 'https://apnews.com', heads: topHeads, pool: topPool }, ...sections] : sections;
 
       localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ ts: Date.now(), sections: allSections }));
       renderHome(allSections);
