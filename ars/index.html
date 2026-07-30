@@ -987,16 +987,30 @@ ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; 
 
 buildEventCheckboxes();
 
-if (!navigator.serial && !navigator.bluetooth) {
-  ui.unsupported.style.display = 'block';
+// Extensions that polyfill navigator.bluetooth (e.g. beacio on iOS Safari)
+// typically inject their content script *after* this inline <script> already
+// ran, so navigator.bluetooth can still be undefined right here even though
+// it shows up a moment later. Recheck for a couple seconds instead of
+// locking in a possibly-stale "unsupported" verdict from a single read.
+let serialListenerAttached = false;
+function updateApiSupportUi() {
+  if (state.transport) return; // don't fight setConnected() once a session is live
+  ui.unsupported.style.display = (!navigator.serial && !navigator.bluetooth) ? 'block' : 'none';
+  ui.connectBtn.disabled = !navigator.serial;
+  ui.connectBluetoothBtn.disabled = !navigator.bluetooth;
+  if (navigator.serial && !serialListenerAttached) {
+    serialListenerAttached = true;
+    navigator.serial.addEventListener('disconnect', (e) => {
+      if (e.target === state.port) handleConnectionLost();
+    });
+  }
 }
-ui.connectBtn.disabled = !navigator.serial;
-ui.connectBluetoothBtn.disabled = !navigator.bluetooth;
-if (navigator.serial) {
-  navigator.serial.addEventListener('disconnect', (e) => {
-    if (e.target === state.port) handleConnectionLost();
-  });
-}
+updateApiSupportUi();
+let apiSupportChecks = 0;
+const apiSupportTimer = setInterval(() => {
+  updateApiSupportUi();
+  if (++apiSupportChecks >= 15) clearInterval(apiSupportTimer);
+}, 200);
 
 </script>
 </body>
