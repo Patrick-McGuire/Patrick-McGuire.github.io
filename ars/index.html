@@ -380,25 +380,45 @@ function bytesEqual(a, b) {
 //      readValue(). Imperfect for multi-chunk responses (a poll only ever
 //      sees whatever the single latest chunk happens to be, so intermediate
 //      chunks can be missed) -- but far better than total silence.
+// A polyfill can fail a step by hanging forever instead of rejecting (seen
+// while testing on Bluefy) -- wrap every speculative step below in a timeout
+// so a broken one can't block the whole connection.
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), ms)),
+  ]);
+}
+
 async function setupNotify(notifyChar, bleReader) {
   const onValue = (value) => {
     bleReader.push(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
   };
-  notifyChar.addEventListener('characteristicvaluechanged', (e) => onValue(e.target.value));
-  notifyChar.oncharacteristicvaluechanged = (e) => onValue(e.target.value);
-
   try {
-    await notifyChar.startNotifications();
+    notifyChar.addEventListener('characteristicvaluechanged', (e) => onValue(e.target.value));
   } catch (e) {
-    log('[bluetooth startNotifications failed: ' + e.message + ']', 'warn');
+    log('[bluetooth addEventListener failed: ' + e.message + ']', 'warn');
+  }
+  try {
+    notifyChar.oncharacteristicvaluechanged = (e) => onValue(e.target.value);
+  } catch (_) {
+    // Some implementations don't expose this as a settable property --
+    // fine, addEventListener above is the standards-track path anyway.
   }
 
   try {
-    const cccd = await notifyChar.getDescriptor(BLE_CCCD_UUID);
-    await cccd.writeValue(Uint8Array.of(0x01, 0x00));
+    await withTimeout(notifyChar.startNotifications(), 4000);
+  } catch (e) {
+    log('[bluetooth startNotifications failed/timed out: ' + e.message + ']', 'warn');
+  }
+
+  try {
+    const cccd = await withTimeout(notifyChar.getDescriptor(BLE_CCCD_UUID), 2000);
+    await withTimeout(cccd.writeValue(Uint8Array.of(0x01, 0x00)), 2000);
   } catch (_) {
     // Not fatal -- most stacks don't need this once startNotifications() has
-    // run, and some polyfills don't expose descriptors at all.
+    // run, and some polyfills don't expose descriptors at all (or hang
+    // instead of rejecting, which withTimeout guards against).
   }
 
   bleReader.lastActivityAt = Date.now();
