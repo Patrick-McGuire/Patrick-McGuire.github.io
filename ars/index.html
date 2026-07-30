@@ -422,17 +422,26 @@ async function setupNotify(notifyChar, bleReader) {
   }
 
   bleReader.lastActivityAt = Date.now();
+  bleReader.pollInFlight = false;
   bleReader.pollTimer = setInterval(async () => {
     if (Date.now() - bleReader.lastActivityAt < BLE_POLL_FALLBACK_STALE_MS) return;
+    // If a previous tick's readValue() never settled, don't pile another one
+    // on top of it -- on a broken stack that can turn into every future GATT
+    // operation silently failing ("already in progress"), which would look
+    // identical to notify just never working.
+    if (bleReader.pollInFlight) return;
+    bleReader.pollInFlight = true;
     try {
-      const value = await notifyChar.readValue();
+      const value = await withTimeout(notifyChar.readValue(), BLE_POLL_FALLBACK_MS * 3);
       const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
       if (!bytesEqual(bytes, bleReader.lastPolled)) {
         bleReader.lastPolled = bytes;
         onValue(value);
       }
     } catch (_) {
-      // Transient GATT busy, etc. -- next tick retries.
+      // Transient GATT busy/timeout -- next tick retries.
+    } finally {
+      bleReader.pollInFlight = false;
     }
   }, BLE_POLL_FALLBACK_MS);
 }
