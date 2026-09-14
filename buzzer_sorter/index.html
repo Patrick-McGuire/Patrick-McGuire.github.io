@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<!--
+  Bench readout for the dev-BuzzerPolarity firmware.
+
+  Connects to the board over Web Serial (Chrome or Edge), shows which bin the transducer on
+  the bench belongs in, and keeps the H-bridge quiet until you turn it on. Everything it
+  displays comes off three lines the firmware prints per measurement: #RESULT, #WIRING and
+  #WAVE.
+
+  Open it straight from disk. If the browser refuses Web Serial from a file:// path, serve
+  the folder instead -- `python -m http.server` -- and open http://localhost:8000/.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>buzzer sorter</title>
+<style>
+  :root {
+    color-scheme: light;
+    --plane:          #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --grid:           #e1e0d9;
+    --axis:           #c3c2b7;
+    --border:         rgba(11, 11, 11, 0.10);
+    --type-a:         #2a78d6;
+    --type-b:         #eb6834;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:          #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted:          #898781;
+      --grid:           #2c2c2a;
+      --axis:           #383835;
+      --border:         rgba(255, 255, 255, 0.10);
+      --type-a:         #3987e5;
+      --type-b:         #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted:          #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255, 255, 255, 0.10);
+    --type-a:         #3987e5;
+    --type-b:         #d95926;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 20px 48px;
+    background: var(--plane);
+    color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  header .spacer { flex: 1; }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--axis); flex: none; }
+  .dot.live { background: var(--good); }
+  .conn { color: var(--text-secondary); font-size: 13px; }
+
+  button {
+    font: inherit; color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--axis); }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  /* ---- the readout ---------------------------------------------------- */
+  .main { display: grid; grid-template-columns: 1fr 240px; gap: 16px; align-items: stretch; }
+  @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
+
+  .verdict {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 28px 20px; min-height: 260px;
+  }
+  .verdict .kicker {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .verdict .letter {
+    font-size: clamp(88px, 20vw, 150px); font-weight: 700; line-height: 1;
+    margin: 4px 0 10px; letter-spacing: -0.03em;
+  }
+  .verdict[data-type="A"] .letter { color: var(--type-a); }
+  .verdict[data-type="B"] .letter { color: var(--type-b); }
+  .verdict[data-type="?"] .letter { color: var(--warning); font-size: clamp(64px, 14vw, 110px); }
+  .verdict .sub { color: var(--text-secondary); font-size: 14px; max-width: 34ch; }
+
+  /* ---- controls -------------------------------------------------------- */
+  .controls { display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .controls .lbl {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: -2px;
+  }
+  .toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .toggle button {
+    padding: 16px 0; font-size: 16px; font-weight: 600; letter-spacing: 0.04em;
+  }
+  .toggle button[aria-pressed="true"] {
+    background: var(--good); border-color: var(--good); color: #fff;
+  }
+  .toggle button.off[aria-pressed="true"] {
+    background: var(--text-secondary); border-color: var(--text-secondary); color: var(--surface-1);
+  }
+  .controls .note { font-size: 12px; color: var(--muted); }
+
+  /* ---- stats ----------------------------------------------------------- */
+  .stats { display: flex; flex-wrap: wrap; gap: 28px; padding: 16px 20px; }
+  .stat .v { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat .k { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .banner {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 14px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .banner .icon { flex: none; font-size: 15px; line-height: 1.4; }
+  .banner.warn { border-color: var(--warning); }
+  .banner.bad  { border-color: var(--critical); }
+  .banner.hide { display: none; }
+
+  /* ---- chart ----------------------------------------------------------- */
+  .chart-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+  .chart-head h2 { font-size: 14px; font-weight: 600; margin: 0; }
+  .chart-head .spacer { flex: 1; }
+  .seg { display: flex; gap: 4px; }
+  .seg button { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+  .seg button[aria-pressed="true"] { border-color: var(--axis); background: var(--plane); }
+  .caption { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .plot { position: relative; }
+  .plot svg { display: block; width: 100%; height: auto; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 8px; font-size: 12px; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10); transition: opacity 80ms;
+  }
+  .tip .tv { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tip .tk { color: var(--muted); }
+
+  details { margin-top: 4px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+  .log, table.nums {
+    margin-top: 10px; font-size: 12px; font-variant-numeric: tabular-nums;
+    max-height: 240px; overflow: auto;
+  }
+  .log { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace;
+         color: var(--text-secondary); }
+  table.nums { border-collapse: collapse; width: 100%; display: block; }
+  table.nums th, table.nums td { text-align: right; padding: 2px 8px; }
+  table.nums th { color: var(--muted); font-weight: 500; position: sticky; top: 0;
+                  background: var(--surface-1); }
+  .hint { font-size: 13px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>buzzer sorter</h1>
+    <span class="dot" id="dot"></span>
+    <span class="conn" id="conn">not connected</span>
+    <span class="spacer"></span>
+    <button id="theme" title="Light / dark">◐</button>
+    <button id="connect">Connect</button>
+  </header>
+
+  <div class="banner warn hide" id="banner">
+    <span class="icon" aria-hidden="true">⚠</span><span id="banner-text"></span>
+  </div>
+
+  <div class="main">
+    <div class="card verdict" id="verdict" data-type="">
+      <div class="kicker">Type</div>
+      <div class="letter" id="letter">–</div>
+      <div class="sub" id="sub">Connect the board, then turn the pulses on.</div>
+    </div>
+
+    <div class="card controls">
+      <div class="lbl">Pulses</div>
+      <div class="toggle">
+        <button id="on" aria-pressed="false">ON</button>
+        <button id="off" class="off" aria-pressed="true">OFF</button>
+      </div>
+      <button id="once">Measure once</button>
+      <div class="note" id="note">The buzzer is silent while this is OFF.</div>
+    </div>
+  </div>
+
+  <div class="card stats" id="stats">
+    <div class="stat"><div class="v" id="s-snr">–</div><div class="k">signal / noise</div></div>
+    <div class="stat"><div class="v" id="s-mirror">–</div><div class="k">mirror quality</div></div>
+    <div class="stat"><div class="v" id="s-onset">–</div><div class="k">onset sample</div></div>
+    <div class="stat"><div class="v" id="s-agree">–</div><div class="k">readings agreeing</div></div>
+    <div class="stat"><div class="v" id="s-wiring">–</div><div class="k">forward drive state</div></div>
+  </div>
+
+  <div class="card">
+    <div class="chart-head">
+      <h2>Pressure at the mic after the drive edge</h2>
+      <span class="spacer"></span>
+      <div class="seg">
+        <button id="v-onset" aria-pressed="true">Onset</button>
+        <button id="v-full" aria-pressed="false">Full window</button>
+      </div>
+    </div>
+    <p class="caption" id="caption">Forward drive minus reverse drive, averaged. The sign of the
+      first swing is the answer.</p>
+    <div class="plot" id="plot">
+      <svg id="svg" role="img" aria-labelledby="svg-title"><title id="svg-title">Averaged
+        microphone response after the H-bridge drive edge</title></svg>
+      <div class="tip" id="tip"><span class="tv" id="tip-v"></span>
+        <span class="tk" id="tip-k"></span></div>
+    </div>
+    <details>
+      <summary>Numbers</summary>
+      <table class="nums"><thead><tr><th>Sample</th><th>Value</th></tr></thead>
+        <tbody id="nums"></tbody></table>
+    </details>
+  </div>
+
+  <details class="card">
+    <summary>Serial log</summary>
+    <div class="log" id="log"></div>
+  </details>
+
+  <p class="hint" id="hint"></p>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- serial ---------------------------------------------- */
+
+let port = null, reader = null, keepReading = false;
+let running = false;          // are pulses meant to be on
+
+function setConnected(on) {
+  $("dot").classList.toggle("live", on);
+  $("conn").textContent = on ? "connected" : "not connected";
+  $("connect").textContent = on ? "Disconnect" : "Connect";
+  $("on").disabled = $("off").disabled = $("once").disabled = !on;
+}
+
+async function send(text) {
+  if (!port || !port.writable) return;
+  const w = port.writable.getWriter();
+  try { await w.write(new TextEncoder().encode(text)); }
+  finally { w.releaseLock(); }
+}
+
+async function connect() {
+  if (port) return disconnect();
+  if (!("serial" in navigator)) {
+    $("hint").textContent =
+      "This browser has no Web Serial. Use Chrome or Edge on desktop.";
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+  } catch (e) {
+    port = null;
+    $("hint").textContent = e && e.name === "NotFoundError" ? "" : "Could not open: " + e;
+    return;
+  }
+  $("hint").textContent = "";
+  setConnected(true);
+  await send("s");              // a previous session may have left it pulsing
+  setRunning(false);
+  keepReading = true;
+  readLoop();
+}
+
+async function disconnect() {
+  keepReading = false;
+  try { await send("s"); } catch (e) { /* the port may already be gone */ }
+  try { if (reader) await reader.cancel(); } catch (e) { /* already closed */ }
+  try { if (port) await port.close(); } catch (e) { /* already closed */ }
+  port = null; reader = null;
+  setConnected(false);
+  setRunning(false);
+}
+
+async function readLoop() {
+  const dec = new TextDecoder();
+  let buf = "";
+  while (keepReading && port && port.readable) {
+    reader = port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf("\n")) >= 0) {
+          handleLine(buf.slice(0, i).replace(/\r$/, ""));
+          buf = buf.slice(i + 1);
+        }
+      }
+    } catch (e) {
+      // a yank of the cable lands here; fall through and let the loop exit
+    } finally {
+      try { reader.releaseLock(); } catch (e) { /* already released */ }
+    }
+  }
+}
+
+/* ---------------- parsing --------------------------------------------- */
+
+// "#RESULT type=A snr=788.6 mirror=-0.95 ..." -> {type:"A", snr:788.6, ...}
+function fields(line) {
+  const out = {};
+  for (const m of line.matchAll(/([a-z]+)=(\S+)/g)) {
+    const n = Number(m[2]);
+    out[m[1]] = Number.isNaN(n) ? m[2] : n;
+  }
+  return out;
+}
+
+let wave = null, last = null;
+
+function handleLine(line) {
+  if (line.length) log(line);
+
+  if (line.startsWith("#RESULT")) {
+    const f = fields(line);
+    const bad = line.indexOf("NO VERDICT:");
+    f.why = bad >= 0 ? line.slice(bad + 11).trim() : "";
+    last = f;
+    render();
+  } else if (line.startsWith("#WIRING")) {
+    const f = fields(line);
+    $("s-wiring").textContent = f.forward || "–";
+  } else if (line.startsWith("#WAVE,")) {
+    wave = line.slice(6).split(",").map(Number);
+    drawChart();
+    fillTable();
+  }
+}
+
+function log(line) {
+  const el = $("log");
+  el.textContent += line + "\n";
+  if (el.textContent.length > 60000) el.textContent = el.textContent.slice(-40000);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ---------------- readout --------------------------------------------- */
+
+function setRunning(on) {
+  running = on;
+  $("on").setAttribute("aria-pressed", String(on));
+  $("off").setAttribute("aria-pressed", String(!on));
+  $("note").textContent = on
+    ? "Pulsing. Swap the buzzer and the label follows."
+    : "The buzzer is silent while this is OFF.";
+}
+
+function render() {
+  const v = $("verdict"), f = last;
+  if (!f) return;
+
+  const type = f.type === "A" || f.type === "B" ? f.type : "?";
+  v.setAttribute("data-type", type);
+  $("letter").textContent = type === "?" ? "?" : type;
+
+  if (type === "?") {
+    $("sub").textContent = f.why || "No verdict.";
+  } else {
+    $("sub").textContent = "Sort this one into bin " + type + ".";
+  }
+
+  $("s-snr").textContent = f.snr ? Math.round(f.snr) + "×" : "–";
+  $("s-mirror").textContent = f.mirror !== undefined ? f.mirror.toFixed(2) : "–";
+  $("s-onset").textContent = f.onset !== undefined ? f.onset : "–";
+  $("s-agree").textContent = f.same !== undefined ? f.same : "–";
+
+  // The only quality problem the operator can actually fix is the mic being too close: once
+  // the clipping reaches the onset there is no shape left to read a sign off.
+  const banner = $("banner");
+  if (type !== "?" && f.clipfrom !== undefined && f.clipfrom <= f.onset) {
+    banner.className = "banner bad";
+    $("banner-text").textContent =
+      "The mic is pinned at full scale from sample " + f.clipfrom + ", at or before the onset at "
+      + f.onset + ". Back the mic away from the hole — this verdict is read off a flat line.";
+  } else if (type === "?") {
+    banner.className = "banner warn";
+    $("banner-text").textContent = f.why || "No verdict.";
+  } else {
+    banner.className = "banner warn hide";
+  }
+}
+
+/* ---------------- chart ------------------------------------------------ */
+
+let view = "onset";
+
+function drawChart() {
+  const svg = $("svg");
+  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild); // keep <title>
+  if (!wave || !wave.length) return;
+
+  const W = 860, H = 260, m = { t: 14, r: 16, b: 30, l: 52 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+
+  // With no verdict there is no onset to mark, and marking sample 0 would imply one.
+  const decided = last && (last.type === "A" || last.type === "B");
+  const onset = decided && last.onset !== undefined ? last.onset : -1;
+  const lo = view === "full" || onset < 0 ? 0 : Math.max(0, onset - 15);
+  const hi = view === "full" || onset < 0 ? wave.length : Math.min(wave.length, onset + 45);
+  const seg = wave.slice(lo, hi);
+
+  let peak = 1;
+  for (const y of seg) peak = Math.max(peak, Math.abs(y));
+  peak = peak * 1.12;
+
+  const X = (i) => m.l + ((i - lo) / (hi - 1 - lo)) * pw;
+  const Y = (y) => m.t + ph / 2 - (y / peak) * (ph / 2);
+
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (n, a) => { const e = document.createElementNS(ns, n);
+    for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const add = (e) => { svg.appendChild(e); return e; };
+
+  // y gridlines: zero gets the axis colour, the rest recede
+  for (const frac of [-1, -0.5, 0, 0.5, 1]) {
+    const y = Y(frac * peak / 1.12);
+    add(el("line", { x1: m.l, x2: m.l + pw, y1: y, y2: y,
+      stroke: frac === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    const t = add(el("text", { x: m.l - 8, y: y + 4, "text-anchor": "end",
+      fill: "var(--muted)", "font-size": 11 }));
+    t.textContent = Math.round(frac * peak / 1.12);
+  }
+
+  // where the mic ran out of range -- the part of the trace that means nothing
+  const full = last && last.full ? last.full : 0;
+  if (full && peak / 1.12 > full * 0.85) {
+    for (const s of [1, -1]) {
+      const y = Y(s * full);
+      add(el("line", { x1: m.l, x2: m.l + pw, y1: y, y2: y, stroke: "var(--muted)",
+        "stroke-width": 1, "stroke-dasharray": "3 3" }));
+    }
+    const t = add(el("text", { x: m.l + pw, y: Y(full) - 6, "text-anchor": "end",
+      fill: "var(--muted)", "font-size": 11 }));
+    t.textContent = "mic at full scale";
+  }
+
+  // x ticks
+  const step = Math.max(1, Math.round((hi - lo) / 8));
+  for (let i = lo; i < hi; i += step) {
+    const t = add(el("text", { x: X(i), y: H - 10, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 11 }));
+    t.textContent = i;
+  }
+  const colour = !decided ? "var(--muted)"
+               : last.type === "B" ? "var(--type-b)" : "var(--type-a)";
+
+  // the onset: a hairline plus a direct label, so the sample the verdict came from is visible
+  if (onset >= lo && onset < hi) {
+    add(el("line", { x1: X(onset), x2: X(onset), y1: m.t, y2: m.t + ph,
+      stroke: colour, "stroke-width": 1, "stroke-dasharray": "2 3", opacity: 0.6 }));
+    const t = add(el("text", { x: X(onset) + 5, y: m.t + 12, fill: "var(--text-secondary)",
+      "font-size": 11 }));
+    t.textContent = "onset";
+  }
+
+  add(el("polyline", {
+    points: seg.map((y, k) => `${X(lo + k)},${Y(y)}`).join(" "),
+    fill: "none", stroke: colour, "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+  if (onset >= lo && onset < hi) {
+    add(el("circle", { cx: X(onset), cy: Y(wave[onset]), r: 5, fill: colour,
+      stroke: "var(--surface-1)", "stroke-width": 2 }));
+  }
+
+  // hover crosshair
+  const cross = add(el("line", { x1: 0, x2: 0, y1: m.t, y2: m.t + ph, stroke: "var(--axis)",
+    "stroke-width": 1, opacity: 0 }));
+  const dot = add(el("circle", { r: 4, fill: colour, opacity: 0 }));
+  const hit = add(el("rect", { x: m.l, y: m.t, width: pw, height: ph, fill: "transparent" }));
+
+  const tip = $("tip");
+  hit.addEventListener("pointermove", (ev) => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) * (W / r.width);
+    let i = Math.round(lo + ((px - m.l) / pw) * (hi - 1 - lo));
+    i = Math.max(lo, Math.min(hi - 1, i));
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i));
+    cross.setAttribute("opacity", 1);
+    dot.setAttribute("cx", X(i)); dot.setAttribute("cy", Y(wave[i]));
+    dot.setAttribute("opacity", 1);
+    $("tip-v").textContent = wave[i];
+    $("tip-k").textContent = "at sample " + i;
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(r.width - 130, (X(i) / W) * r.width + 10) + "px";
+    tip.style.top = ((Y(wave[i]) / H) * r.height - 34) + "px";
+  });
+  hit.addEventListener("pointerleave", () => {
+    cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); tip.style.opacity = 0;
+  });
+
+  $("caption").textContent = "Forward drive minus reverse drive, averaged over "
+    + (last && last.rounds ? last.rounds : "?") + " rounds. Samples "
+    + lo + "–" + (hi - 1) + " at 50 kHz — one sample is 20 µs.";
+}
+
+function fillTable() {
+  if (!wave) return;
+  $("nums").innerHTML = wave
+    .map((v, i) => `<tr><td>${i}</td><td>${v}</td></tr>`).join("");
+}
+
+/* ---------------- wiring up -------------------------------------------- */
+
+$("connect").addEventListener("click", connect);
+$("on").addEventListener("click", async () => { setRunning(true); await send("c"); });
+$("off").addEventListener("click", async () => {
+  setRunning(false);
+  $("note").textContent = "Stopping after the measurement in flight finishes.";
+  await send("s");
+});
+$("once").addEventListener("click", async () => {
+  $("sub").textContent = "Measuring…";
+  await send("m");
+});
+
+for (const [id, mode] of [["v-onset", "onset"], ["v-full", "full"]]) {
+  $(id).addEventListener("click", () => {
+    view = mode;
+    $("v-onset").setAttribute("aria-pressed", String(mode === "onset"));
+    $("v-full").setAttribute("aria-pressed", String(mode === "full"));
+    drawChart();
+  });
+}
+
+$("theme").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme",
+    cur ? (cur === "dark" ? "light" : "dark") : (dark ? "light" : "dark"));
+  drawChart();
+});
+
+window.addEventListener("beforeunload", () => { if (port) send("s"); });
+
+setConnected(false);
+if (!("serial" in navigator)) {
+  $("hint").textContent = "This browser has no Web Serial — use Chrome or Edge on desktop. "
+    + "If you opened this from a file:// path and Connect does nothing, run "
+    + "`python -m http.server` in this folder and open http://localhost:8000/buzzer_sorter.html";
+}
+</script>
+</body>
+</html>
