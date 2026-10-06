@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<!--
+  Live readout for a USB GPS receiver that talks NMEA 0183.
+
+  Connects over Web Serial (Chrome or Edge), shows the raw sentence feed as it arrives, and
+  parses it into a fix summary, a sky plot, per-satellite signal strength and a field-by-field
+  breakdown of the latest sentence of each type. Written against a u-blox 6 (VID 1546), but
+  anything that prints $--GGA / $--RMC / $--GSA / $--GSV works; the restart buttons send UBX
+  CFG-RST and only mean something to u-blox receivers.
+
+  Only one program can hold a serial port at a time -- close u-center, a terminal, or anything
+  else that has the COM port open before pressing Connect.
+
+  Open it straight from disk. If the browser refuses Web Serial from a file:// path, serve
+  the folder instead -- `python -m http.server` -- and open http://localhost:8000/.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gps monitor</title>
+<style>
+  :root {
+    color-scheme: light;
+    --plane:          #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --muted:          #898781;
+    --grid:           #e1e0d9;
+    --axis:           #c3c2b7;
+    --border:         rgba(11, 11, 11, 0.10);
+    --type-a:         #2a78d6;
+    --type-b:         #eb6834;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:          #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted:          #898781;
+      --grid:           #2c2c2a;
+      --axis:           #383835;
+      --border:         rgba(255, 255, 255, 0.10);
+      --type-a:         #3987e5;
+      --type-b:         #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted:          #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255, 255, 255, 0.10);
+    --type-a:         #3987e5;
+    --type-b:         #d95926;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 20px 48px;
+    background: var(--plane);
+    color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0; }
+  header .spacer { flex: 1; }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--axis); flex: none; }
+  .dot.live { background: var(--good); }
+  .dot.stale { background: var(--warning); }
+  .conn { color: var(--text-secondary); font-size: 13px; }
+
+  button, select, input {
+    font: inherit; color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px;
+  }
+  button { cursor: pointer; }
+  select { padding: 7px 8px; }
+  button:hover:not(:disabled) { border-color: var(--axis); }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    min-width: 0;
+  }
+
+  /* ---- fix readout ------------------------------------------------------ */
+  .main { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: stretch; }
+  .pair { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: stretch; }
+  @media (max-width: 760px) { .main, .pair { grid-template-columns: 1fr; } }
+
+  .verdict {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 28px 20px; min-height: 230px;
+  }
+  .verdict .kicker {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .verdict .letter {
+    font-size: clamp(52px, 11vw, 88px); font-weight: 700; line-height: 1;
+    margin: 6px 0 12px; letter-spacing: -0.03em; color: var(--muted);
+  }
+  .verdict[data-fix="none"] .letter { color: var(--warning); }
+  .verdict[data-fix="2d"]   .letter { color: var(--type-a); }
+  .verdict[data-fix="3d"]   .letter { color: var(--good); }
+  .verdict .pos {
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+  .verdict .sub { color: var(--text-secondary); font-size: 14px; max-width: 46ch; margin-top: 6px; }
+  .verdict a { color: var(--type-a); font-size: 13px; }
+
+  .controls { display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .controls .lbl {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: -2px;
+  }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .row3 button { padding: 10px 0; }
+  .controls .note { font-size: 12px; color: var(--muted); }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 28px; padding: 16px 20px; }
+  .stat .v { font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+             font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .banner {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 14px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .banner .icon { flex: none; font-size: 15px; line-height: 1.4; }
+  .banner.warn { border-color: var(--warning); }
+  .banner.bad  { border-color: var(--critical); }
+  .banner.hide { display: none; }
+
+  /* ---- charts ----------------------------------------------------------- */
+  .chart-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; flex-wrap: wrap; }
+  .chart-head .spacer { flex: 1; }
+  .caption { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .plot svg { display: block; width: 100%; height: auto; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-top: 6px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px;
+              vertical-align: -1px; }
+
+  /* ---- decoded + raw ---------------------------------------------------- */
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .seg button { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+  .seg button[aria-pressed="true"] { border-color: var(--axis); background: var(--plane); }
+  .seg button .n { color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .rawline { font-size: 12px; color: var(--text-secondary); margin: 10px 0 6px;
+             word-break: break-all; }
+  table.nums { border-collapse: collapse; width: 100%; font-size: 13px;
+               font-variant-numeric: tabular-nums; }
+  table.nums th, table.nums td { text-align: left; padding: 3px 10px 3px 0;
+                                 border-bottom: 1px solid var(--grid); vertical-align: top; }
+  table.nums th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  table.nums td.i { color: var(--muted); width: 2.5em; }
+  table.nums td.raw { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  table.nums td.m { color: var(--text-secondary); }
+
+  .feedbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .feedbar input { padding: 5px 10px; font-size: 13px; width: 150px; }
+  .feedbar button { padding: 5px 12px; font-size: 13px; }
+  .feedbar .rate { font-size: 12px; color: var(--muted); }
+  .log {
+    font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap; word-break: break-all;
+    height: 320px; overflow: auto; color: var(--text-secondary);
+    background: var(--plane); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  .log .tag { color: var(--text-primary); font-weight: 600; }
+  .log .bad { color: var(--critical); }
+  .log .txt { color: var(--warning); }
+  .log .bin { color: var(--muted); }
+  .hint { font-size: 13px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>gps monitor</h1>
+    <span class="dot" id="dot"></span>
+    <span class="conn" id="conn">not connected</span>
+    <span class="spacer"></span>
+    <select id="baud" title="Baud rate (ignored by USB-native receivers)">
+      <option>4800</option><option selected>9600</option><option>19200</option>
+      <option>38400</option><option>57600</option><option>115200</option>
+    </select>
+    <button id="theme" title="Light / dark">◐</button>
+    <button id="connect">Connect</button>
+  </header>
+
+  <div class="banner warn hide" id="banner">
+    <span class="icon" aria-hidden="true">⚠</span><span id="banner-text"></span>
+  </div>
+
+  <div class="main">
+    <div class="card verdict" id="verdict" data-fix="">
+      <div class="kicker">Fix</div>
+      <div class="letter" id="letter">–</div>
+      <div class="pos" id="pos"></div>
+      <div class="sub" id="sub">Connect the receiver to start.</div>
+      <a id="maplink" target="_blank" rel="noopener" hidden>Open in OpenStreetMap</a>
+    </div>
+
+    <div class="card controls">
+      <div class="lbl">Restart receiver</div>
+      <div class="row3">
+        <button id="r-hot"  title="Keep ephemeris, almanac, time and position">Hot</button>
+        <button id="r-warm" title="Drop ephemeris, keep almanac">Warm</button>
+        <button id="r-cold" title="Drop everything and search from scratch">Cold</button>
+      </div>
+      <div class="note">u-blox only (UBX CFG-RST). Cold throws away the almanac, so the next
+        fix can take up to ~13 minutes. Use it when the receiver is stuck on stale data from
+        somewhere far away.</div>
+      <button id="copy" disabled>Copy position</button>
+    </div>
+  </div>
+
+  <div class="card stats">
+    <div class="stat"><div class="v" id="s-used">–</div><div class="k">satellites used / in view</div></div>
+    <div class="stat"><div class="v" id="s-snr">–</div><div class="k">best signal (dB-Hz)</div></div>
+    <div class="stat"><div class="v" id="s-dop">–</div><div class="k">HDOP / PDOP</div></div>
+    <div class="stat"><div class="v" id="s-alt">–</div><div class="k">altitude (MSL)</div></div>
+    <div class="stat"><div class="v" id="s-spd">–</div><div class="k">speed / course</div></div>
+    <div class="stat"><div class="v" id="s-time">–</div><div class="k">UTC</div></div>
+    <div class="stat"><div class="v" id="s-ttff">–</div><div class="k" id="s-ttff-k">time to first fix</div></div>
+    <div class="stat"><div class="v" id="s-ant">–</div><div class="k">antenna</div></div>
+  </div>
+
+  <div class="pair">
+    <div class="card">
+      <div class="chart-head"><h2>Sky</h2></div>
+      <p class="caption">Looking up, north at the top. The centre is straight overhead; the
+        outer ring is the horizon.</p>
+      <div class="plot"><svg id="sky" role="img" aria-label="Sky plot of satellites in view"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--good)"></i>used in fix</span>
+        <span><i style="background:var(--type-a)"></i>heard</span>
+        <span><i style="border:1.5px solid var(--muted)"></i>expected, not heard</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>Signal strength</h2></div>
+      <p class="caption">Carrier-to-noise per satellite. Around 35 dB-Hz and up is a solid
+        lock; under 20 the receiver is struggling.</p>
+      <div class="plot"><svg id="snr" role="img" aria-label="Signal strength per satellite"></svg></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-head">
+      <h2>Decoded</h2>
+      <span class="spacer"></span>
+      <div class="seg" id="types"></div>
+    </div>
+    <div class="rawline mono" id="dec-raw">Nothing received yet.</div>
+    <table class="nums">
+      <thead><tr><th>#</th><th>Field</th><th>Value</th><th>Meaning</th></tr></thead>
+      <tbody id="dec"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="chart-head"><h2>Serial feed</h2></div>
+    <div class="feedbar">
+      <input id="filter" placeholder="filter, e.g. GSV" spellcheck="false">
+      <button id="pause" aria-pressed="false">Pause</button>
+      <button id="clear">Clear</button>
+      <button id="save">Save log</button>
+      <span class="rate" id="rate"></span>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <p class="hint" id="hint"></p>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- serial ---------------------------------------------- */
+
+let port = null, reader = null, keepReading = false;
+let lastByteAt = 0;
+
+function setConnected(on) {
+  $("dot").classList.toggle("live", on);
+  $("dot").classList.remove("stale");
+  $("conn").textContent = on ? "connected" : "not connected";
+  $("connect").textContent = on ? "Disconnect" : "Connect";
+  $("baud").disabled = on;
+  for (const id of ["r-hot", "r-warm", "r-cold"]) $(id).disabled = !on;
+}
+
+async function send(bytes) {
+  if (!port || !port.writable) return;
+  const w = port.writable.getWriter();
+  try { await w.write(bytes); }
+  finally { w.releaseLock(); }
+}
+
+async function connect() {
+  if (port) return disconnect();
+  if (!("serial" in navigator)) {
+    $("hint").textContent = "This browser has no Web Serial. Use Chrome or Edge on desktop.";
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: Number($("baud").value), bufferSize: 65536 });
+  } catch (e) {
+    port = null;
+    $("hint").textContent = !e || e.name === "NotFoundError" ? ""
+      : e.name === "InvalidStateError" || /open/i.test(e.message)
+        ? "Could not open the port — another program probably has it. Close it and try again."
+        : "Could not open: " + e;
+    return;
+  }
+  $("hint").textContent = "";
+  setConnected(true);
+  resetState();
+  searchStart = performance.now();
+  lastByteAt = performance.now();
+  keepReading = true;
+  readLoop();
+}
+
+async function disconnect() {
+  keepReading = false;
+  try { if (reader) await reader.cancel(); } catch (e) { /* already closed */ }
+  try { if (port) await port.close(); } catch (e) { /* already closed */ }
+  port = null; reader = null;
+  setConnected(false);
+  schedule();
+}
+
+async function readLoop() {
+  const dec = new TextDecoder("latin1");
+  let buf = "";
+  while (keepReading && port && port.readable) {
+    reader = port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        lastByteAt = performance.now();
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf("\n")) >= 0) {
+          handleLine(buf.slice(0, i).replace(/\r$/, ""));
+          buf = buf.slice(i + 1);
+        }
+        if (buf.length > 4096) buf = "";   // binary with no newlines; don't grow forever
+      }
+    } catch (e) {
+      // a yank of the cable lands here; fall through and let the loop exit
+    } finally {
+      try { reader.releaseLock(); } catch (e) { /* already released */ }
+    }
+  }
+  if (keepReading) disconnect();     // the device went away on its own
+}
+
+/* UBX frame: sync, class, id, little-endian length, payload, 8-bit Fletcher over class..payload */
+function ubx(cls, id, payload) {
+  const m = [0xB5, 0x62, cls, id, payload.length & 255, payload.length >> 8, ...payload];
+  let a = 0, b = 0;
+  for (let i = 2; i < m.length; i++) { a = (a + m[i]) & 255; b = (b + a) & 255; }
+  m.push(a, b);
+  return new Uint8Array(m);
+}
+
+// CFG-RST: navBbrMask (which aided data to clear), resetMode 0x02 = restart GNSS only
+const RESTART = { hot: [0x00, 0x00], warm: [0x01, 0x00], cold: [0xFF, 0xFF] };
+
+async function restart(kind) {
+  await send(ubx(0x06, 0x04, [...RESTART[kind], 0x02, 0x00]));
+  logNote(`-- sent ${kind} start (UBX CFG-RST) --`);
+  searchStart = performance.now();
+  ttff = null;
+  firstFixSeen = false;
+  sky = {}; used = new Set();
+  schedule();
+}
+
+/* ---------------- parsing --------------------------------------------- */
+
+let fix, sky, gsvBuf, used, usedBuild, prevType, latest, counts, txt, searchStart, ttff,
+    firstFixSeen, badSums, goodSums, rateWindow;
+
+function resetState() {
+  fix = {};               // merged from GGA / RMC / GSA / VTG
+  sky = {};               // talker -> [{prn, el, az, snr}] from the last complete GSV run
+  gsvBuf = {};            // talker -> GSV run being assembled
+  used = new Set();       // PRNs the receiver says are in the solution (GSA)
+  usedBuild = null;
+  prevType = "";
+  latest = {};            // sentence type -> {f, raw, ok}
+  counts = {};
+  txt = {};
+  ttff = null; firstFixSeen = false; searchStart = performance.now();
+  badSums = 0; goodSums = 0;
+  rateWindow = [];
+}
+resetState();
+
+function checksum(line) {
+  const star = line.lastIndexOf("*");
+  if (star < 0 || star + 3 > line.length) return null;     // sentence carries no checksum
+  let c = 0;
+  for (let i = 1; i < star; i++) c ^= line.charCodeAt(i);
+  return c === parseInt(line.slice(star + 1, star + 3), 16);
+}
+
+// ddmm.mmmm + hemisphere -> signed decimal degrees
+function coord(v, hemi) {
+  if (!v) return null;
+  const x = parseFloat(v), d = Math.floor(x / 100);
+  const deg = d + (x - d * 100) / 60;
+  return hemi === "S" || hemi === "W" ? -deg : deg;
+}
+
+const num = (v) => (v === "" || v === undefined ? null : Number(v));
+
+function handleLine(raw) {
+  const line = raw.trim();
+  if (!line) return;
+  const dollar = line.indexOf("$");
+  if (dollar < 0) { logLine(line, "bin"); return; }
+  const s = line.slice(dollar);           // a UBX reply in front of a sentence leaves junk
+  const ok = checksum(s);
+  if (ok === false) { badSums++; logLine(s, "bad"); return; }
+  goodSums++;
+  rateWindow.push(performance.now());
+
+  const star = s.lastIndexOf("*");
+  const f = s.slice(1, star < 0 ? undefined : star).split(",");
+  const tag = f[0];
+  const proprietary = tag[0] === "P";
+  const talker = proprietary ? "" : tag.slice(0, 2);
+  const type = proprietary ? tag : tag.slice(2);
+
+  counts[type] = (counts[type] || 0) + 1;
+  latest[type] = { f, raw: s, talker };
+  logLine(s, type === "TXT" ? "txt" : "");
+
+  switch (type) {
+    case "GGA": {
+      fix.time = f[1];
+      fix.lat = coord(f[2], f[3]);
+      fix.lon = coord(f[4], f[5]);
+      fix.quality = num(f[6]) || 0;
+      fix.numUsed = num(f[7]);
+      fix.hdop = num(f[8]);
+      fix.alt = num(f[9]);
+      fix.sep = num(f[11]);
+      noteFix(fix.quality > 0);
+      break;
+    }
+    case "RMC": {
+      fix.time = f[1] || fix.time;
+      fix.rmcValid = f[2] === "A";
+      if (fix.rmcValid) { fix.lat = coord(f[3], f[4]); fix.lon = coord(f[5], f[6]); }
+      fix.speedKn = num(f[7]);
+      fix.course = num(f[8]);
+      fix.date = f[9];
+      break;
+    }
+    case "VTG": {
+      fix.course = num(f[1]);
+      fix.speedKn = num(f[5]);
+      break;
+    }
+    case "GSA": {
+      // A multi-GNSS receiver sends one GSA per constellation back to back; together they
+      // are one epoch's list of satellites in use.
+      if (prevType !== "GSA" || !usedBuild) usedBuild = new Set();
+      for (let i = 3; i <= 14; i++) if (f[i]) usedBuild.add(Number(f[i]));
+      used = usedBuild;
+      fix.fixType = num(f[2]);
+      fix.pdop = num(f[15]); fix.hdop = num(f[16]) ?? fix.hdop; fix.vdop = num(f[17]);
+      break;
+    }
+    case "GSV": {
+      const total = num(f[1]), n = num(f[2]);
+      if (n === 1 || !gsvBuf[talker]) gsvBuf[talker] = [];
+      const b = gsvBuf[talker];
+      for (let i = 4; i + 3 < f.length; i += 4) {
+        if (f[i] === "") continue;
+        b.push({ talker, prn: Number(f[i]), el: num(f[i + 1]), az: num(f[i + 2]),
+                 snr: num(f[i + 3]) });
+      }
+      if (n === total) { sky[talker] = b; gsvBuf[talker] = null; }
+      break;
+    }
+    case "TXT": {
+      const t = f.slice(4).join(",");
+      const m = t.match(/^ANTSTATUS=(\w+)/);
+      if (m) txt.ant = m[1];
+      break;
+    }
+  }
+  prevType = type;
+  schedule();
+}
+
+function noteFix(have) {
+  const now = performance.now();
+  if (have && !firstFixSeen) {
+    firstFixSeen = true;
+    ttff = (now - searchStart) / 1000;
+    logNote(`-- fix acquired after ${ttff.toFixed(0)} s --`);
+  } else if (!have && firstFixSeen) {
+    firstFixSeen = false;
+    ttff = null;
+    searchStart = now;
+    logNote("-- fix lost --");
+  }
+}
+
+/* ---------------- field dictionary ------------------------------------- */
+
+const SV = Array.from({ length: 12 }, (_, i) => "SV used " + (i + 1));
+const FIELDS = {
+  GGA: ["UTC time", "Latitude", "N/S", "Longitude", "E/W", "Fix quality", "Satellites used",
+        "HDOP", "Altitude", "Altitude units", "Geoid separation", "Separation units",
+        "DGPS age (s)", "DGPS station"],
+  RMC: ["UTC time", "Status", "Latitude", "N/S", "Longitude", "E/W", "Speed (knots)",
+        "Course over ground (°)", "Date", "Magnetic variation", "Variation E/W", "Mode",
+        "Nav status"],
+  GSA: ["Selection mode", "Fix type", ...SV, "PDOP", "HDOP", "VDOP", "System ID"],
+  VTG: ["Course true (°)", "T", "Course magnetic (°)", "M", "Speed (knots)", "N",
+        "Speed (km/h)", "K", "Mode"],
+  GLL: ["Latitude", "N/S", "Longitude", "E/W", "UTC time", "Status", "Mode"],
+  TXT: ["Messages in group", "Message number", "Severity", "Text"],
+  ZDA: ["UTC time", "Day", "Month", "Year", "Zone hours", "Zone minutes"],
+};
+
+const QUALITY = { 0: "no fix", 1: "GPS fix", 2: "differential (SBAS/DGPS)", 3: "PPS",
+                  4: "RTK fixed", 5: "RTK float", 6: "dead reckoning", 7: "manual", 8: "simulator" };
+const MODE = { A: "autonomous", D: "differential", E: "estimated (dead reckoning)",
+               N: "no fix", M: "manual", S: "simulator", F: "RTK float", R: "RTK fixed" };
+const TALKER = { GP: "GPS", GL: "GLONASS", GA: "Galileo", GB: "BeiDou", BD: "BeiDou",
+                 GQ: "QZSS", GN: "multi-GNSS" };
+
+function fmtTime(v) {
+  if (!v || v.length < 6) return "";
+  return `${v.slice(0, 2)}:${v.slice(2, 4)}:${v.slice(4)} UTC`;
+}
+
+function fieldName(type, i) {
+  if (type === "GSV") {
+    if (i <= 3) return ["", "Messages in run", "Message number", "Satellites in view"][i];
+    const k = Math.floor((i - 4) / 4), j = (i - 4) % 4;
+    return `Sat ${k + 1} ` + ["PRN", "elevation (°)", "azimuth (°)", "SNR (dB-Hz)"][j];
+  }
+  return (FIELDS[type] || [])[i - 1] || "Field " + i;
+}
+
+function meaning(type, i, v, f) {
+  if (v === "") return "";
+  const name = fieldName(type, i);
+  if (name === "UTC time") return fmtTime(v);
+  if (name === "Latitude")  return coord(v, f[i + 1]).toFixed(6) + "°";
+  if (name === "Longitude") return coord(v, f[i + 1]).toFixed(6) + "°";
+  if (name === "Mode") return MODE[v] || "";
+  if (name === "Speed (knots)") return (Number(v) * 1.852).toFixed(2) + " km/h";
+  if (type === "GGA" && i === 6) return QUALITY[v] || "";
+  if (type === "GGA" && i === 9) return Number(v).toFixed(1) + " m above mean sea level";
+  if (type === "GGA" && i === 8 || type === "GSA" && i >= 15 && i <= 17) {
+    const d = Number(v);
+    return d >= 99 ? "no solution" : d < 1 ? "ideal" : d < 2 ? "excellent" : d < 5 ? "good"
+         : d < 10 ? "moderate" : "poor";
+  }
+  if (type === "RMC" && i === 2) return v === "A" ? "valid" : "void — no fix";
+  if (type === "GLL" && i === 6) return v === "A" ? "valid" : "void — no fix";
+  if (type === "RMC" && i === 9 && v.length === 6)
+    return `20${v.slice(4, 6)}-${v.slice(2, 4)}-${v.slice(0, 2)}`;
+  if (type === "GSA" && i === 1) return v === "A" ? "automatic 2D/3D" : "manual";
+  if (type === "GSA" && i === 2) return { 1: "no fix", 2: "2D", 3: "3D" }[v] || "";
+  if (type === "TXT" && i === 3) return { "00": "error", "01": "warning", "02": "notice",
+                                          "07": "user" }[v] || "";
+  if (type === "GSV" && i >= 4 && (i - 4) % 4 === 3) return snrWord(Number(v));
+  return "";
+}
+
+const snrWord = (s) => s >= 40 ? "strong" : s >= 30 ? "good" : s >= 20 ? "weak" : "marginal";
+
+/* ---------------- rendering -------------------------------------------- */
+
+let pending = false;
+function schedule() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => { pending = false; render(); });
+}
+
+function allSats() {
+  const out = [];
+  for (const t in sky) for (const s of sky[t]) out.push(s);
+  return out.sort((a, b) => a.prn - b.prn);
+}
+
+function render() {
+  const sats = allSats();
+  const heard = sats.filter((s) => s.snr > 0);
+  const best = heard.reduce((m, s) => Math.max(m, s.snr), 0);
+  const have = fix.quality > 0;
+
+  // ---- big readout
+  const v = $("verdict");
+  if (!port && fix.quality === undefined) {
+    v.dataset.fix = "";
+    $("letter").textContent = "–";
+    $("pos").textContent = "";
+    $("sub").textContent = "Connect the receiver to start.";
+  } else if (!have) {
+    v.dataset.fix = "none";
+    $("letter").textContent = "NO FIX";
+    $("pos").textContent = "";
+    $("sub").textContent = !sats.length
+      ? "Searching. No satellites reported yet — on a cold start the receiver has to find " +
+        "one before it knows where to look for the rest."
+      : !heard.length
+        ? `Expecting ${sats.length} satellites but hearing none of them. Check the antenna ` +
+          "has open sky."
+        : `Hearing ${heard.length} of ${sats.length} (best ${best} dB-Hz). Needs 4 good ` +
+          "signals plus their ephemeris — about 30 s of clean reception each.";
+  } else {
+    const three = fix.fixType === 3 || (fix.fixType === undefined && fix.numUsed >= 4);
+    v.dataset.fix = three ? "3d" : "2d";
+    $("letter").textContent = three ? "3D FIX" : "2D FIX";
+    $("pos").textContent = `${fix.lat.toFixed(6)}, ${fix.lon.toFixed(6)}`;
+    $("sub").textContent = (QUALITY[fix.quality] || "fix") +
+      (fix.hdop != null ? ` · HDOP ${fix.hdop}` : "") +
+      (fix.hdop != null ? ` · roughly ±${(fix.hdop * 2.5).toFixed(0)} m` : "");
+  }
+  const ml = $("maplink");
+  if (have && fix.lat != null) {
+    ml.hidden = false;
+    ml.href = `https://www.openstreetmap.org/?mlat=${fix.lat.toFixed(6)}&mlon=${fix.lon.toFixed(6)}#map=17/${fix.lat.toFixed(6)}/${fix.lon.toFixed(6)}`;
+  } else ml.hidden = true;
+  $("copy").disabled = !(have && fix.lat != null);
+
+  // ---- stats
+  $("s-used").textContent = (fix.numUsed ?? "–") + " / " + (sats.length || 0);
+  $("s-snr").textContent = best ? best : "–";
+  $("s-dop").textContent = (fix.hdop != null && fix.hdop < 99 ? fix.hdop : "–") + " / " +
+                           (fix.pdop != null && fix.pdop < 99 ? fix.pdop : "–");
+  $("s-alt").textContent = have && fix.alt != null ? fix.alt.toFixed(1) + " m" : "–";
+  $("s-spd").textContent = have && fix.speedKn != null
+    ? (fix.speedKn * 1.852).toFixed(1) + " km/h" + (fix.course != null ? " · " + fix.course.toFixed(0) + "°" : "")
+    : "–";
+  $("s-time").textContent = fix.time ? fmtTime(fix.time).replace(" UTC", "").slice(0, 8) : "–";
+  if (ttff != null) {
+    $("s-ttff").textContent = ttff.toFixed(0) + " s";
+    $("s-ttff-k").textContent = "time to first fix";
+  } else if (port) {
+    $("s-ttff").textContent = fmtDur((performance.now() - searchStart) / 1000);
+    $("s-ttff-k").textContent = "searching for";
+  } else {
+    $("s-ttff").textContent = "–";
+  }
+  $("s-ant").textContent = txt.ant || "–";
+
+  drawSky(sats);
+  drawSnr(sats);
+  renderTypes();
+  renderDecoded();
+  renderBanner();
+}
+
+function fmtDur(s) {
+  s = Math.floor(s);
+  return s < 60 ? s + " s" : Math.floor(s / 60) + " m " + String(s % 60).padStart(2, "0") + " s";
+}
+
+function renderBanner() {
+  const b = $("banner");
+  let msg = "", cls = "warn";
+  const quiet = port && performance.now() - lastByteAt > 3000;
+  $("dot").classList.toggle("stale", !!quiet);
+  if (quiet) {
+    msg = "Connected, but nothing has arrived for " +
+          Math.round((performance.now() - lastByteAt) / 1000) + " s. Is this the right port?";
+  } else if (badSums > 20 && badSums > goodSums) {
+    msg = "Most of what's arriving fails its checksum — the baud rate is probably wrong. " +
+          "Disconnect, pick another rate and reconnect.";
+    cls = "bad";
+  } else if (txt.ant && txt.ant !== "OK") {
+    msg = `The receiver reports the antenna as ${txt.ant}` +
+          (txt.ant === "OPEN" ? " — nothing is plugged in, or the cable is broken."
+           : txt.ant === "SHORT" ? " — the antenna feed is shorted." : ".");
+    cls = "bad";
+  }
+  b.className = "banner " + cls + (msg ? "" : " hide");
+  $("banner-text").textContent = msg;
+}
+
+const ns = "http://www.w3.org/2000/svg";
+function el(n, a, text) {
+  const e = document.createElementNS(ns, n);
+  for (const k in a) e.setAttribute(k, a[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function satColour(s) {
+  return used.has(s.prn) ? "var(--good)" : s.snr > 0 ? "var(--type-a)" : "none";
+}
+
+function drawSky(sats) {
+  const svg = $("sky"), S = 300, c = S / 2, R = 128;
+  svg.setAttribute("viewBox", `0 0 ${S} ${S}`);
+  svg.replaceChildren();
+  for (const e of [0, 30, 60]) {
+    svg.appendChild(el("circle", { cx: c, cy: c, r: R * (90 - e) / 90, fill: "none",
+      stroke: e === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    if (e) svg.appendChild(el("text", { x: c + 3, y: c - R * (90 - e) / 90 + 11,
+      fill: "var(--muted)", "font-size": 10 }, e + "°"));
+  }
+  svg.appendChild(el("line", { x1: c - R, x2: c + R, y1: c, y2: c, stroke: "var(--grid)" }));
+  svg.appendChild(el("line", { x1: c, x2: c, y1: c - R, y2: c + R, stroke: "var(--grid)" }));
+  for (const [t, x, y] of [["N", c, c - R - 6], ["S", c, c + R + 15],
+                           ["E", c + R + 9, c + 4], ["W", c - R - 9, c + 4]])
+    svg.appendChild(el("text", { x, y, "text-anchor": "middle", fill: "var(--text-secondary)",
+      "font-size": 11, "font-weight": 600 }, t));
+
+  for (const s of sats) {
+    if (s.el == null || s.az == null) continue;
+    const r = R * (90 - s.el) / 90, a = (s.az - 90) * Math.PI / 180;
+    const x = c + r * Math.cos(a), y = c + r * Math.sin(a);
+    const fill = satColour(s);
+    svg.appendChild(el("circle", { cx: x, cy: y, r: 9, fill,
+      stroke: fill === "none" ? "var(--muted)" : "var(--surface-1)", "stroke-width": 1.5 }));
+    svg.appendChild(el("text", { x, y: y + 3.5, "text-anchor": "middle", "font-size": 9.5,
+      "font-weight": 600, fill: fill === "none" ? "var(--muted)" : "#fff" }, s.prn));
+  }
+  if (!sats.length)
+    svg.appendChild(el("text", { x: c, y: c + 30, "text-anchor": "middle", fill: "var(--muted)",
+      "font-size": 12 }, "no satellites reported"));
+}
+
+function drawSnr(sats) {
+  const svg = $("snr"), W = 620, H = 260, m = { t: 16, r: 8, b: 34, l: 34 };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const top = Math.max(50, ...sats.map((s) => s.snr || 0));
+  const Y = (v) => m.t + ph - (v / top) * ph;
+
+  for (let g = 0; g <= top; g += 10) {
+    svg.appendChild(el("line", { x1: m.l, x2: m.l + pw, y1: Y(g), y2: Y(g),
+      stroke: g === 0 ? "var(--axis)" : "var(--grid)" }));
+    svg.appendChild(el("text", { x: m.l - 6, y: Y(g) + 4, "text-anchor": "end",
+      fill: "var(--muted)", "font-size": 11 }, g));
+  }
+  if (!sats.length) {
+    svg.appendChild(el("text", { x: m.l + pw / 2, y: m.t + ph / 2, "text-anchor": "middle",
+      fill: "var(--muted)", "font-size": 12 }, "no satellites reported"));
+    return;
+  }
+  const slot = pw / Math.max(sats.length, 8), bw = Math.min(28, slot * 0.7);
+  sats.forEach((s, k) => {
+    const x = m.l + slot * k + (slot - bw) / 2;
+    const v = s.snr || 0, fill = satColour(s);
+    if (v > 0) {
+      svg.appendChild(el("rect", { x, y: Y(v), width: bw, height: Y(0) - Y(v), rx: 3,
+        fill, opacity: fill === "none" ? 1 : 0.9 }));
+      svg.appendChild(el("text", { x: x + bw / 2, y: Y(v) - 4, "text-anchor": "middle",
+        "font-size": 10.5, fill: "var(--text-secondary)" }, v));
+    } else {
+      svg.appendChild(el("rect", { x, y: Y(0) - 3, width: bw, height: 3, rx: 1,
+        fill: "var(--axis)" }));
+    }
+    svg.appendChild(el("text", { x: x + bw / 2, y: H - m.b + 15, "text-anchor": "middle",
+      "font-size": 10.5, fill: "var(--text-secondary)" }, s.prn));
+    if (s.talker && s.talker !== "GP")
+      svg.appendChild(el("text", { x: x + bw / 2, y: H - m.b + 27, "text-anchor": "middle",
+        "font-size": 9, fill: "var(--muted)" }, (TALKER[s.talker] || s.talker).slice(0, 3)));
+  });
+}
+
+/* ---------------- decoded panel ---------------------------------------- */
+
+let shown = "GGA";
+const ORDER = ["GGA", "RMC", "GSA", "GSV", "VTG", "GLL", "ZDA", "TXT"];
+
+function renderTypes() {
+  const box = $("types");
+  const types = Object.keys(counts).sort((a, b) =>
+    ((ORDER.indexOf(a) + 1) || 99) - ((ORDER.indexOf(b) + 1) || 99) || a.localeCompare(b));
+  if (box.childElementCount !== types.length) {
+    box.replaceChildren(...types.map((t) => {
+      const b = document.createElement("button");
+      b.dataset.t = t;
+      b.innerHTML = `${t}<span class="n"></span>`;
+      b.addEventListener("click", () => { shown = t; schedule(); });
+      return b;
+    }));
+  }
+  if (!counts[shown] && types.length) shown = types[0];
+  for (const b of box.children) {
+    b.setAttribute("aria-pressed", String(b.dataset.t === shown));
+    b.querySelector(".n").textContent = counts[b.dataset.t];
+  }
+}
+
+let lastDecoded = "";
+function renderDecoded() {
+  const L = latest[shown];
+  if (!L) return;
+  if (L.raw === lastDecoded) return;     // keep the table still unless the sentence changed
+  lastDecoded = L.raw;
+  const who = L.talker ? ` · talker ${L.talker} (${TALKER[L.talker] || "?"})` : "";
+  $("dec-raw").textContent = L.raw + who;
+  const rows = [];
+  for (let i = 1; i < L.f.length; i++) {
+    const v = L.f[i];
+    rows.push(`<tr><td class="i">${i}</td><td>${esc(fieldName(shown, i))}</td>` +
+      `<td class="raw">${esc(v) || '<span style="color:var(--muted)">—</span>'}</td>` +
+      `<td class="m">${esc(meaning(shown, i, v, L.f))}</td></tr>`);
+  }
+  $("dec").innerHTML = rows.join("");
+}
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------------- raw feed --------------------------------------------- */
+
+const MAX_LINES = 600;
+let paused = false, filter = "";
+const history = [];                  // everything this session, for Save log
+
+function logLine(text, cls) {
+  history.push(text);
+  if (history.length > 200000) history.splice(0, 50000);
+  if (paused || (filter && !text.toUpperCase().includes(filter))) return;
+  appendLog(text, cls);
+}
+
+function logNote(text) {
+  history.push(text);
+  appendLog(text, "txt");
+}
+
+function appendLog(text, cls) {
+  const box = $("log");
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  const m = text.match(/^(\$[A-Z0-9]+)(.*)$/);
+  if (m && cls !== "bad") {
+    const t = document.createElement("span");
+    t.className = "tag"; t.textContent = m[1];
+    d.append(t, m[2]);
+  } else {
+    d.textContent = cls === "bin" ? "[non-NMEA] " + text.replace(/[^\x20-\x7e]/g, "·") : text;
+    if (cls === "bad") d.textContent += "   ← bad checksum";
+  }
+  box.appendChild(d);
+  while (box.childElementCount > MAX_LINES) box.firstChild.remove();
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+setInterval(() => {
+  const now = performance.now();
+  while (rateWindow.length && now - rateWindow[0] > 5000) rateWindow.shift();
+  $("rate").textContent = port
+    ? `${(rateWindow.length / 5).toFixed(1)} sentences/s` + (badSums ? ` · ${badSums} bad checksums` : "")
+    : "";
+  if (port) schedule();              // keeps the search timer and staleness check ticking
+}, 1000);
+
+/* ---------------- wiring up -------------------------------------------- */
+
+$("connect").addEventListener("click", connect);
+$("r-hot").addEventListener("click", () => restart("hot"));
+$("r-warm").addEventListener("click", () => restart("warm"));
+$("r-cold").addEventListener("click", () => {
+  if (confirm("Cold start wipes the almanac and ephemeris. The next fix can take up to ~13 minutes. Go ahead?"))
+    restart("cold");
+});
+$("copy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(`${fix.lat.toFixed(6)}, ${fix.lon.toFixed(6)}`);
+  $("copy").textContent = "Copied";
+  setTimeout(() => ($("copy").textContent = "Copy position"), 1200);
+});
+$("pause").addEventListener("click", () => {
+  paused = !paused;
+  $("pause").setAttribute("aria-pressed", String(paused));
+  $("pause").textContent = paused ? "Resume" : "Pause";
+});
+$("clear").addEventListener("click", () => $("log").replaceChildren());
+$("filter").addEventListener("input", (e) => (filter = e.target.value.trim().toUpperCase()));
+$("save").addEventListener("click", () => {
+  const blob = new Blob([history.join("\r\n") + "\r\n"], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "gps-" + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19) + ".nmea";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+$("theme").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme",
+    cur ? (cur === "dark" ? "light" : "dark") : (dark ? "light" : "dark"));
+});
+
+if ("serial" in navigator) navigator.serial.addEventListener("disconnect", (e) => {
+  if (e.target === port) { keepReading = false; port = null; setConnected(false); schedule(); }
+});
+
+setConnected(false);
+render();
+if (!("serial" in navigator)) {
+  $("hint").textContent = "This browser has no Web Serial — use Chrome or Edge on desktop. "
+    + "If you opened this from a file:// path and Connect does nothing, run "
+    + "`python -m http.server` in this folder and open http://localhost:8000/";
+}
+</script>
+</body>
+</html>
