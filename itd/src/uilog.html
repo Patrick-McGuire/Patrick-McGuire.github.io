@@ -1,0 +1,42 @@
+<div class="ml-bar">
+  <h1>Motor log<small>UI-mode UInnnnn.CSV &middot; driver board session</small></h1>
+  <div class="ml-grp">
+    <span class="ml-lbl">Source</span>
+    <div class="ml-row">
+      <label class="ml-pick">Load UI log(s)
+        <input type="file" id="mlPick" accept=".csv" multiple></label>
+      <button id="mlFetch" disabled title="Runs --uilog over the Console tab's connection">Fetch latest from device</button>
+      <button id="mlDownload" disabled>Download CSV</button>
+    </div>
+  </div>
+  <div class="ml-grp">
+    <label class="ml-lbl" for="mlSession">Session</label>
+    <div class="ml-row"><select id="mlSession" disabled><option>none loaded</option></select></div>
+  </div>
+  <div class="ml-grp">
+    <span class="ml-lbl">View</span>
+    <div class="ml-row">
+      <button id="mlFit">Fit all</button>
+      <label class="ml-chk"><input type="checkbox" id="mlShowCmds" checked> Commands</label>
+      <label class="ml-chk"><input type="checkbox" id="mlShowSamples"> Sample rows in table</label>
+    </div>
+  </div>
+  <span class="ml-status" id="mlStatus"></span>
+</div>
+
+<div class="ml-summary" id="mlSummary">
+  <div class="ml-empty">Load a <code>UInnnnn.CSV</code> from the SD card, or fetch the latest session from a
+    connected board. Each UI-mode session is one file, named after the audio file it followed.</div>
+</div>
+
+<div class="ml-chartwrap">
+  <canvas id="mlChart"></canvas>
+  <div class="ml-tip" id="mlTip" hidden></div>
+</div>
+
+<div class="ml-tablewrap">
+  <table class="ml-table">
+    <thead><tr><th>t (s)</th><th>event</th><th>motor</th><th>pos</th><th>target</th><th>mA</th><th>V</th><th>detail</th></tr></thead>
+    <tbody id="mlRows"></tbody>
+  </table>
+</div>

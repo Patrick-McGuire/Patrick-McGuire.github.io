@@ -1,13 +1,13 @@
 'use strict';
 
-const EVENT_TYPE_NAMES = ['NONE', 'DECODED', 'DECODING_FAILED', 'SLEEP_FAILED', 'BATTERY_STATUS', 'BUFFER_OVERFLOW', 'BOOT'];
+const EVENT_TYPE_NAMES = ['NONE', 'DECODED', 'DECODING_FAILED', 'SLEEP_FAILED', 'BATTERY_STATUS', 'BUFFER_OVERFLOW', 'BOOT', 'RECORD_START'];
 // Mirrors testMessages[] in include/ars.h — hex values shown green in the log.
 const TEST_MESSAGES = new Set([
   0x1A3F, 0xB27D, 0x4C88, 0x73E1, 0x9D42,
   0x0F3C, 0x56A9, 0xE204, 0x3B7F, 0x8C15,
 ]);
 // Bit 0 (NONE) is filtered separately on device; only the real event types are user-toggleable.
-const EVENT_TOGGLE_BITS = [1, 2, 3, 4, 5, 6];
+const EVENT_TOGGLE_BITS = [1, 2, 3, 4, 5, 6, 7];
 // Decode a DECODED event's attribute byte into consensus telemetry:
 // [candidates:3 bits][voteScore:5 bits]. voteScore is the winner's agreement
 // normalized to 0..31 (fraction of the offsets scanned that voted for it); the
@@ -120,7 +120,7 @@ const ui = {
   battery: $('battery'), readBatBtn: $('readBatBtn'),
   txMessage: $('txMessage'), txSendBtn: $('txSendBtn'), txStatus: $('txStatus'), txOwnIdBtn: $('txOwnIdBtn'),
   motorPanel: $('motorPanel'), motorState: $('motorState'), motorPos: $('motorPos'), motorTarget: $('motorTarget'),
-  motorCurrent: $('motorCurrent'), motorTach: $('motorTach'), motorWake: $('motorWake'),
+  motorCurrent: $('motorCurrent'), motorTach: $('motorTach'), motorWake: $('motorWake'), motorMode: $('motorMode'),
   motorOpenBtn: $('motorOpenBtn'), motorCloseBtn: $('motorCloseBtn'), motorStopBtn: $('motorStopBtn'), motorZeroBtn: $('motorZeroBtn'),
   sleepNowSeconds: $('sleepNowSeconds'), sleepNowBtn: $('sleepNowBtn'),
   cfgVersion: $('cfgVersion'),
@@ -172,6 +172,7 @@ function log(text, cls) {
 function setConnected(connected) {
   ui.status.textContent = connected ? 'Connected' : 'Disconnected';
   ui.dot.classList.toggle('connected', connected);
+  if (window.ITD && window.ITD.onConnection) window.ITD.onConnection(connected);
   ui.connectBtn.disabled = connected || !navigator.serial;
   ui.connectBluetoothBtn.disabled = connected || !navigator.bluetooth;
   ui.disconnectBtn.disabled = !connected;
@@ -187,9 +188,16 @@ function setConnected(connected) {
   ];
   ctrls.forEach(el => el.disabled = !connected);
   // Motor status poll (ITS_THAT_DEEP and later builds answer --motor; older ones just print an
-  // error, which is harmless). Once a second also keeps the Bluetooth link marked active.
+  // error, which is harmless): 4 Hz while the motor is moving, 1 Hz otherwise. Also keeps the
+  // Bluetooth link marked active.
   clearInterval(state.motorPoll);
-  state.motorPoll = connected ? setInterval(() => sendQuiet('--motor'), 1000) : null;
+  state.motorPollAt = 0;
+  state.motorPoll = connected ? setInterval(() => {
+    const moving = state.motorState === 'opening' || state.motorState === 'closing';
+    if (!moving && Date.now() - state.motorPollAt < 1000) return;
+    state.motorPollAt = Date.now();
+    sendQuiet('--motor');
+  }, 250) : null;
   ui.autoSyncTime.disabled = connected;
   ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(el => el.disabled = !connected);
 }
@@ -462,8 +470,11 @@ function handleLine(line) {
   // Motor status arrives every second; keep it out of the console unless it is an error.
   const isMotor = line.startsWith('MSG:\tMOTOR ');
   const isMotorPollNoise = /Invalid message: .*--motor/.test(line);
+  // UI log dumps (--uilog) go to whoever asked (the ITD page's motor log tab), not the console.
+  const isUiLog = line.startsWith('MSG:\tUILOG ');
+  if (isUiLog && window.ITD && window.ITD.onUiLogLine) window.ITD.onUiLogLine(line.slice('MSG:\tUILOG '.length));
 
-  if (!isLogEntry && !isMotor && !isMotorPollNoise) {
+  if (!isLogEntry && !isMotor && !isMotorPollNoise && !isUiLog) {
     let cls = null;
     if (line.startsWith('ERROR:')) cls = 'err';
     else if (line.startsWith('WARN:')) cls = 'warn';
@@ -502,10 +513,23 @@ function handleLine(line) {
 function handleMotor(kv) {
   const num = (v, d) => (Number.isFinite(parseFloat(v)) ? parseFloat(v).toFixed(d) : '—');
   ui.motorState.textContent = kv.state || '—';
-  ui.motorPos.textContent = (kv.pos ?? '—') + ' pulses';
-  ui.motorTarget.textContent = (kv.target ?? '—') + ' pulses';
+  state.motorState = kv.state;
+  if (ui.motorMode) {
+    ui.motorMode.textContent = kv.mode === 'ui' ? 'UI (driver board on, mic off; ' + (kv.ui_left_s ?? '?') + ' s left)'
+      : kv.mode === 'mic' ? 'Mic (listening + recording, driver board off)' : '—';
+  }
+  const duty = '(duty ' + Math.round(100 * (parseFloat(kv.duty) || 0)) + '%)';
+  if (kv.remaining_ms !== undefined) {
+    // Timed build (no encoder): show the move time left instead of pulses.
+    ui.motorPos.textContent = 'timed move (no encoder)';
+    ui.motorTarget.textContent = num(kv.remaining_ms / 1000, 1) + ' s left';
+    ui.motorTach.textContent = 'off  ' + duty;
+  } else {
+    ui.motorPos.textContent = (kv.pos ?? '—') + ' pulses';
+    ui.motorTarget.textContent = (kv.target ?? '—') + ' pulses';
+    ui.motorTach.textContent = num(kv.tach_hz, 1) + ' Hz  ' + duty;
+  }
   ui.motorCurrent.textContent = num(kv.current, 3) + ' A';
-  ui.motorTach.textContent = num(kv.tach_hz, 1) + ' Hz  (duty ' + Math.round(100 * (parseFloat(kv.duty) || 0)) + '%)';
   // A falling uptime means the board rebooted (e.g. a brown-out when the motor starts).
   const up = parseInt(kv.up, 10);
   if (Number.isFinite(up) && Number.isFinite(state.motorUp) && up + 2 < state.motorUp) {
@@ -645,6 +669,7 @@ function handleLogEnd() {
   ui.logEmpty.style.display = state.logEntries.length === 0 ? 'block' : 'none';
   ui.downloadCsvBtn.disabled = state.logEntries.length === 0;
   log('[dump complete: ' + state.logEntries.length + ' entries]', 'tx');
+  if (window.ITD && window.ITD.onEventLog) window.ITD.onEventLog(state.logEntries.slice());
 }
 
 function handleLogCleared() {
@@ -789,6 +814,12 @@ ui.motorZeroBtn.addEventListener('click', () => {
 ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; });
 
 buildEventCheckboxes();
+
+// Hooks for the ITD page (its other tabs use this connection and the dumped event log).
+if (window.ITD) {
+  window.ITD.consoleSend = (cmd) => send(cmd);
+  window.ITD.isConnected = () => !!state.writer;
+}
 
 // Extensions that polyfill navigator.bluetooth (e.g. beacio on iOS Safari)
 // typically inject their content script *after* this inline <script> already

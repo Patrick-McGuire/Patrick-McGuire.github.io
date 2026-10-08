@@ -1,0 +1,95 @@
+<header>
+  <h1>Capture Scope<small>SD .BIN / field-tool .bin + .log &middot; 50 kHz int16</small></h1>
+
+  <div class="grp">
+    <span class="lbl">Capture</span>
+    <div class="row">
+      <label class="pick" id="pickLbl">Load files
+        <input type="file" id="pick" accept=".bin,.log,.txt,.csv" multiple></label>
+      <button id="useConsoleLog" disabled title="Overlay the event log dumped in the Console tab">Console event log</button>
+      <span class="hint" id="pickInfo">SD card NNNNN.BIN (+ event log CSV), or field-tool .bin/.log</span>
+    </div>
+  </div>
+
+  <div class="grp">
+    <span class="lbl">Band</span>
+    <div class="row">
+      <button id="bProto" aria-pressed="true">7.5&ndash;9.5k</button>
+      <button id="bFull" aria-pressed="false">0&ndash;20k</button>
+      <input type="number" id="fLo" value="7500" min="0" max="25000" step="100" aria-label="Band low Hz">
+      <input type="number" id="fHi" value="9500" min="0" max="25000" step="100" aria-label="Band high Hz">
+      <span class="hint">Hz</span>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label for="hist">History</label>
+    <div class="row">
+      <input type="number" id="hist" value="20" min="0.05" max="3600" step="5" aria-label="History seconds">
+      <span class="hint">s</span>
+      <button id="reset">Reset zoom</button>
+      <button id="fit">Fit all</button>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label for="tstart">At</label>
+    <div class="row">
+      <input type="number" id="tstart" value="0" min="0" step="1" aria-label="Start seconds">
+      <span class="hint">s</span>
+    </div>
+  </div>
+
+  <div class="grp">
+    <label for="gain">Contrast</label>
+    <div class="row">
+      <input type="range" id="gain" min="-30" max="30" value="0" aria-label="Contrast offset dB">
+      <span class="stat" id="gainTxt">auto</span>
+    </div>
+  </div>
+
+  <div class="grp">
+    <span class="lbl">Overlays</span>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="showEv" checked> Log events</label>
+      <label class="chk"><input type="checkbox" id="link" checked> Link panes</label>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="pane" data-pane="A">
+    <div class="ptop">
+      <span class="tag">A</span>
+      <span class="fname" data-role="name">no capture</span>
+      <span class="stat" data-role="stat"></span>
+    </div>
+    <div class="cwrap"><canvas></canvas><div class="over" data-role="over">
+      <b>Load captures to begin</b>
+      <span>Wheel zooms &middot; shift = time only &middot; ctrl = frequency only &middot; drag pans</span>
+      <div class="bar" data-role="bar" hidden><i></i></div>
+    </div></div>
+  </section>
+
+  <section class="pane" data-pane="B">
+    <div class="ptop">
+      <span class="tag">B</span>
+      <span class="fname" data-role="name">no capture</span>
+      <span class="stat" data-role="stat"></span>
+    </div>
+    <div class="cwrap"><canvas></canvas><div class="over" data-role="over">
+      <b>Second receiver</b>
+      <span>Appears here when the selection holds two ports.</span>
+      <div class="bar" data-role="bar" hidden><i></i></div>
+    </div></div>
+  </section>
+</main>
+
+<footer>
+  <span class="key"><i style="background:var(--ok)"></i>decoded</span>
+  <span class="key"><i style="background:var(--bad)"></i>decode failed</span>
+  <span class="key"><i style="background:var(--det)"></i>burst detected</span>
+  <span class="key"><i style="background:var(--warn)"></i>pdm drop / overflow</span>
+  <span class="hint" id="evInfo"></span>
+  <span id="hover" class="stat" style="margin-left:auto"></span>
+</footer>

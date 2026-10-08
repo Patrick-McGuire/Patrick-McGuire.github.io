@@ -1,0 +1,65 @@
+:root{
+  --bg:#0b1113; --panel:#121a1d; --panel-2:#182327; --line:#24343a;
+  --fg:#dfeaec; --fg-dim:#8ba3a9; --fg-faint:#5d7378;
+  --accent:#4ecdc4; --ok:#5ddc8a; --warn:#f2b544; --bad:#ff7a6b; --det:#6aa9ff; --violet:#b48cff;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:13px;
+  display:flex;flex-direction:column;overflow:hidden}
+.ml-bar{background:var(--panel);border-bottom:1px solid var(--line);padding:9px 16px;
+  display:flex;flex-wrap:wrap;gap:13px;align-items:flex-end}
+.ml-bar h1{margin:0;font-size:15px;font-weight:600;white-space:nowrap}
+.ml-bar h1 small{display:block;font-weight:400;font-size:10px;color:var(--fg-faint);letter-spacing:.05em;
+  text-transform:uppercase;margin-top:2px}
+.ml-grp{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ml-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-faint)}
+.ml-row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+button,select{font-family:var(--sans);font-size:12px;color:var(--fg);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:4px;padding:5px 9px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.ml-pick{font-size:11px;padding:4px 8px;border:1px dashed var(--line);border-radius:4px;color:var(--fg-dim);
+  cursor:pointer;white-space:nowrap}
+.ml-pick:hover{border-color:var(--accent);color:var(--accent)}
+.ml-pick input{display:none}
+.ml-chk{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--fg-dim);cursor:pointer;white-space:nowrap}
+.ml-status{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--fg-faint);align-self:center}
+
+.ml-summary{display:flex;flex-wrap:wrap;gap:6px 22px;padding:9px 16px;background:var(--bg);
+  border-bottom:1px solid var(--line);font-size:12px}
+.ml-summary .ml-kv{display:flex;flex-direction:column;gap:1px}
+.ml-summary .ml-k{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-faint)}
+.ml-summary .ml-v{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--fg)}
+.ml-summary .ml-v.bad{color:var(--bad)}
+.ml-empty{color:var(--fg-faint)}
+.ml-empty code{font-family:var(--mono);color:var(--accent)}
+
+.ml-chartwrap{flex:1;min-height:260px;position:relative}
+#mlChart{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+.ml-tip{position:absolute;pointer-events:none;background:rgba(18,26,29,.95);border:1px solid var(--line);
+  border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:11px;line-height:1.45;
+  white-space:pre;color:var(--fg);max-width:min(420px,80vw);overflow:hidden;text-overflow:ellipsis}
+
+.ml-tablewrap{height:30%;min-height:120px;max-height:320px;overflow:auto;border-top:1px solid var(--line);
+  background:var(--panel)}
+.ml-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+.ml-table th{position:sticky;top:0;background:var(--panel-2);color:var(--fg-dim);font-weight:500;text-align:left;
+  padding:4px 8px;border-bottom:1px solid var(--line)}
+.ml-table td{padding:3px 8px;border-bottom:1px solid rgba(36,52,58,.6);white-space:nowrap}
+.ml-table td:last-child{white-space:normal;word-break:break-word;color:var(--fg-dim)}
+.ml-table tr{cursor:pointer}
+.ml-table tr:hover td{background:rgba(78,205,196,.08)}
+.ml-table .ev-MOTOR{color:var(--accent)}
+.ml-table .ev-BUTTON{color:var(--warn)}
+.ml-table .ev-BT_RX,.ml-table .ev-USB_RX{color:var(--det)}
+.ml-table .ev-BLE{color:var(--violet)}
+.ml-table .ev-SESSION_START,.ml-table .ev-SESSION_END,.ml-table .ev-SLEEP{color:var(--ok)}
+.ml-table .ev-stall{color:var(--bad)}
+@media (max-width:700px){
+  .ml-bar{padding:8px 10px;gap:9px}
+  .ml-status{margin-left:0;width:100%}
+  .ml-chartwrap{min-height:340px}
+}

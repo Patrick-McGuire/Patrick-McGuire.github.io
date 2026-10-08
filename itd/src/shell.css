@@ -1,0 +1,33 @@
+/* Page shell: one tab bar, one panel per tool. Each tool's own stylesheet is scoped to its panel
+   by build.py, so these are the only page-level rules. */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;height:100%}
+body.itd{display:flex;flex-direction:column;background:#0b0e12;color:#e6e6e6;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+.itd-tabs{display:flex;align-items:stretch;gap:2px;padding:0 10px;background:#07090c;
+  border-bottom:1px solid #222a33;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.itd-brand{font-weight:700;font-size:13px;letter-spacing:.12em;color:#4ecdc4;padding:0 12px 0 4px;
+  display:flex;align-items:center}
+.itd-tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;color:#8a93a3;
+  font:500 13px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:10px 14px 8px;cursor:pointer;
+  white-space:nowrap}
+.itd-tab:hover{color:#e6e6e6}
+.itd-tab[aria-selected=true]{color:#e6e6e6;border-bottom-color:#4ecdc4}
+.itd-tab:focus-visible{outline:2px solid #4ecdc4;outline-offset:-2px}
+.itd-conn{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:#8a93a3;
+  padding:0 4px 0 12px;white-space:nowrap}
+.itd-conn i{width:7px;height:7px;border-radius:50%;background:#ff6b6b;display:inline-block}
+.itd-conn.on i{background:#4ed29a}
+.itd-panel{flex:1;min-height:0;position:relative}
+#tab-console{overflow:auto}
+/* grid items default to min-width:auto, so the wide event-log table would stretch the console's
+   single phone column past the screen; let them shrink and scroll inside instead */
+#tab-console main>*{min-width:0}
+#tab-console .log-table-wrap{overflow-x:auto}
+@media (max-width:560px){
+  .itd-brand{display:none}
+  .itd-tab{padding:10px 10px 8px}
+  .itd-conn{font-size:0;padding-left:8px}   /* just the light */
+}
+#tab-audio,#tab-motorlog{overflow:hidden}
