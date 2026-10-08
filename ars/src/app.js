@@ -122,6 +122,7 @@ const ui = {
   motorPanel: $('motorPanel'), motorState: $('motorState'), motorPos: $('motorPos'), motorTarget: $('motorTarget'),
   motorCurrent: $('motorCurrent'), motorTach: $('motorTach'), motorWake: $('motorWake'),
   motorOpenBtn: $('motorOpenBtn'), motorCloseBtn: $('motorCloseBtn'), motorStopBtn: $('motorStopBtn'), motorZeroBtn: $('motorZeroBtn'),
+  sleepNowSeconds: $('sleepNowSeconds'), sleepNowBtn: $('sleepNowBtn'),
   cfgVersion: $('cfgVersion'),
   cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'), cfgState: $('cfgState'),
   cfgEvents: $('cfgEvents'), cfgEventsCurrent: $('cfgEventsCurrent'),
@@ -182,6 +183,7 @@ function setConnected(connected) {
     ui.consoleInput, ui.consoleSendBtn,
     ui.txMessage, ui.txSendBtn, ui.txOwnIdBtn,
     ui.motorOpenBtn, ui.motorCloseBtn, ui.motorStopBtn, ui.motorZeroBtn,
+    ui.sleepNowSeconds, ui.sleepNowBtn,
   ];
   ctrls.forEach(el => el.disabled = !connected);
   // Motor status poll (ITS_THAT_DEEP and later builds answer --motor; older ones just print an
@@ -504,7 +506,13 @@ function handleMotor(kv) {
   ui.motorTarget.textContent = (kv.target ?? '—') + ' pulses';
   ui.motorCurrent.textContent = num(kv.current, 3) + ' A';
   ui.motorTach.textContent = num(kv.tach_hz, 1) + ' Hz  (duty ' + Math.round(100 * (parseFloat(kv.duty) || 0)) + '%)';
-  ui.motorWake.textContent = kv.wake || '—';
+  // A falling uptime means the board rebooted (e.g. a brown-out when the motor starts).
+  const up = parseInt(kv.up, 10);
+  if (Number.isFinite(up) && Number.isFinite(state.motorUp) && up + 2 < state.motorUp) {
+    log('[board rebooted: reset cause ' + (kv.reset || '?') + ']', 'err');
+  }
+  state.motorUp = up;
+  ui.motorWake.textContent = (kv.wake || '—') + '  (last reset: ' + (kv.reset || '—') + ', up ' + (Number.isFinite(up) ? up + ' s' : '—') + ')';
 }
 
 function handleTransmit(kv) {
@@ -766,6 +774,11 @@ ui.txOwnIdBtn.addEventListener('click', () => {
   if (!Number.isFinite(id)) { sendUntilAcked('config'); return alert('Config not read yet - press again in a second'); }
   ui.txMessage.value = id;
   send('--transmit ' + id);
+});
+ui.sleepNowBtn.addEventListener('click', () => {
+  const s = parseInt(ui.sleepNowSeconds.value, 10);
+  if (!Number.isFinite(s) || s < 5 || s > 3600) return alert('Sleep time must be 5–3600 s');
+  send('--sleepnow ' + s);
 });
 ui.motorOpenBtn.addEventListener('click', () => send('--motor -open'));
 ui.motorCloseBtn.addEventListener('click', () => send('--motor -close'));
