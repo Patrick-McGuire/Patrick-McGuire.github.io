@@ -10,7 +10,7 @@ window.ITD = (function () {
     on(evt, fn) { (handlers[evt] = handlers[evt] || []).push(fn); },
     emit(evt, data) { (handlers[evt] || []).forEach((fn) => { try { fn(data); } catch (e) { console.error(e); } }); },
     isActive(tab) { return api.active === tab; },
-    // called by the Console (ars/src/app.js)
+    // called by the Console (src/console/app.js)
     onEventLog(entries) { api.eventLog = entries; api.emit("eventlog", entries); },
     onUiLogLine(line) { api.emit("uilogline", line); },
     onConnection(connected) { api.emit("connection", connected); },
