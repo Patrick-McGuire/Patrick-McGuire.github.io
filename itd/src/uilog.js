@@ -268,6 +268,7 @@ function showSession(i) {
   ml.cur = ml.sessions[i] || null;
   $m("mlSession").value = String(i);
   $m("mlDownload").disabled = !ml.cur;
+  $m("mlWatermark").hidden = !!ml.cur;
   if (ml.cur) { summarize(ml.cur); fit(); } else draw();
   renderTable();
 }

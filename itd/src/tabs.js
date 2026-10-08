@@ -1,7 +1,9 @@
 "use strict";
-/* Tab switching. The URL hash names the tab (#console, #audio, #motorlog) so a tab can be linked
-   and survives a reload. Canvases size themselves from their box, which is 0x0 while hidden, so a
-   resize is fired whenever a tab is shown. */
+/* Tab switching. The URL hash names the tab (#/console, #/audio, #/motorlog) so a tab can be
+   linked and survives a reload. The slash matters: a bare #console is also the Console's log
+   element id, and the browser would scroll to it. Old #console-style links still work.
+   Canvases size themselves from their box, which is 0x0 while hidden, so a resize is fired
+   whenever a tab is shown. */
 (function () {
   const tabs = [...document.querySelectorAll(".itd-tab")];
   const names = tabs.map((t) => t.dataset.tab);
@@ -14,7 +16,7 @@
       t.tabIndex = on ? 0 : -1;
       document.getElementById("tab-" + t.dataset.tab).hidden = !on;
     }
-    if (push && location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    if (push && location.hash !== "#/" + name) history.replaceState(null, "", "#/" + name);
     window.dispatchEvent(new Event("resize"));
   }
   tabs.forEach((t, i) => {
@@ -26,8 +28,11 @@
       n.focus(); show(n.dataset.tab, true);
     });
   });
-  addEventListener("hashchange", () => show(location.hash.slice(1), false));
-  show(location.hash.slice(1), false);
+  const fromHash = () => location.hash.replace(/^#\/?/, "");
+  addEventListener("hashchange", () => show(fromHash(), false));
+  show(fromHash(), false);
+  // an old-style link (#console) has already scrolled the panel to that element: undo it
+  document.getElementById("tab-console").scrollTop = 0;
 
   // connection light in the tab bar, so it is visible from every tab
   const conn = document.getElementById("itdConn");

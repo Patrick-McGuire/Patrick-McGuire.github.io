@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 ARS = SRC / "console"
 OUT = ROOT / "index.html"
+ASSETS = ROOT / "assets"   # logos: regenerate with assets/make_logo.py
 
 
 def read(path: Path) -> str:
@@ -96,6 +97,16 @@ def wrap_js(js: str, name: str) -> str:
 
 
 # ------------------------------------------------------------------------------- page
+def logo(name: str, cls: str) -> str:
+    svg = read(ASSETS / name).strip()
+    return svg.replace("<svg ", f'<svg class="{cls}" focusable="false" ', 1)
+
+
+def html_part(path: Path) -> str:
+    """A tool's HTML, with {{LOGO_FULL}} replaced by the inline logo."""
+    return read(path).replace("{{LOGO_FULL}}", logo("logo-full.svg", "itd-logo-full"))
+
+
 def main() -> None:
     styles = "\n".join([
         read(SRC / "shell.css"),
@@ -122,6 +133,10 @@ def main() -> None:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ITD Tools</title>
+<meta name="description" content="It's That Deep: acoustic release console, capture viewer and motor log">
+<meta name="theme-color" content="#07090c">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 {styles}
@@ -129,7 +144,7 @@ def main() -> None:
 </head>
 <body class="itd">
 <nav class="itd-tabs" role="tablist" aria-label="Tools">
-  <span class="itd-brand">ITD</span>
+  <a class="itd-brand" href="#/console" title="ITD: It's That Deep">{logo("logo-mark.svg", "itd-logo-mark")}</a>
   <button class="itd-tab" role="tab" data-tab="console" aria-controls="tab-console">Console</button>
   <button class="itd-tab" role="tab" data-tab="audio" aria-controls="tab-audio">Audio viewer</button>
   <button class="itd-tab" role="tab" data-tab="motorlog" aria-controls="tab-motorlog">Motor log</button>
@@ -139,10 +154,10 @@ def main() -> None:
 {read(ARS / "body.html")}
 </section>
 <section class="itd-panel" id="tab-audio" role="tabpanel" aria-label="Audio viewer" hidden>
-{read(SRC / "viewer.html")}
+{html_part(SRC / "viewer.html")}
 </section>
 <section class="itd-panel" id="tab-motorlog" role="tabpanel" aria-label="Motor log" hidden>
-{read(SRC / "uilog.html")}
+{html_part(SRC / "uilog.html")}
 </section>
 <script>
 {scripts}

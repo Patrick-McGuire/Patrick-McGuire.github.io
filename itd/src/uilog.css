@@ -39,6 +39,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 
 .ml-chartwrap{flex:1;min-height:260px;position:relative}
 #mlChart{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+.ml-watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.ml-watermark .itd-logo-full{margin:0}
 .ml-tip{position:absolute;pointer-events:none;background:rgba(18,26,29,.95);border:1px solid var(--line);
   border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:11px;line-height:1.45;
   white-space:pre;color:var(--fg);max-width:min(420px,80vw);overflow:hidden;text-overflow:ellipsis}
