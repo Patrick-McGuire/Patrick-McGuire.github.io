@@ -17,14 +17,14 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-
   display:flex;flex-direction:column;overflow:hidden}
 
 header{background:var(--panel);border-bottom:1px solid var(--line);
-  padding-block:9px;padding-inline:16px;
+  padding-block:7px;padding-inline:16px;
   padding-top:calc(9px + env(safe-area-inset-top,0px));
-  display:flex;flex-wrap:wrap;gap:13px;align-items:flex-end}
+  display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center}
 h1{margin:0;font-size:15px;font-weight:600;white-space:nowrap}
 h1 small{display:block;font-weight:400;font-size:10px;color:var(--fg-faint);letter-spacing:.05em;
   text-transform:uppercase;margin-top:2px}
-.grp{display:flex;flex-direction:column;gap:4px;min-width:0}
-.grp>label,.grp>span.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-faint)}
+.grp{display:flex;align-items:center;gap:5px;min-width:0}
+.grp>.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-faint);margin-right:2px}
 .row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 button,input[type=number]{font-family:var(--sans);font-size:12px;color:var(--fg);
   background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:5px 9px}
@@ -32,8 +32,8 @@ button{cursor:pointer;white-space:nowrap}
 button:hover{border-color:var(--accent)}
 button[aria-pressed=true]{background:var(--accent);color:#06211f;border-color:var(--accent);font-weight:600}
 button:focus-visible,input:focus-visible,label:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-input[type=number]{width:72px;font-family:var(--mono);font-variant-numeric:tabular-nums}
-input[type=range]{width:110px;accent-color:var(--accent)}
+input[type=number]{width:68px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+input[type=range]{width:90px;accent-color:var(--accent)}
 .chk{display:flex;gap:5px;align-items:center;font-size:12px;color:var(--fg-dim);cursor:pointer;white-space:nowrap}
 .hint{font-size:10px;color:var(--fg-faint);font-family:var(--mono)}
 

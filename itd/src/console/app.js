@@ -138,7 +138,7 @@ const ui = {
   downloadCsvBtn: $('downloadCsvBtn'), clearLogTableBtn: $('clearLogTableBtn'),
   clearDeviceLogBtn: $('clearDeviceLogBtn'),
   console: $('console'), consoleInput: $('consoleInput'),
-  consoleSendBtn: $('consoleSendBtn'), consoleClearBtn: $('consoleClearBtn'),
+  consoleSendBtn: $('consoleSendBtn'), consoleClearBtn: $('consoleClearBtn'), consoleDownloadBtn: $('consoleDownloadBtn'),
   consoleForm: $('consoleForm'), unsupported: $('unsupported'),
 };
 
@@ -161,7 +161,10 @@ const RECONNECT_INTERVAL_MS = 1000;
 const ACK_KEY_BY_TAG = { CONFIG: 'config', TIME: 'time', BAT: 'bat', LOG: 'log' };
 const GETTER_CMD_BY_ACK_KEY = { config: '--config', time: '--time', bat: '--bat', log: '--log' };
 
+// Everything shown in the console, with the time it arrived, for "Download".
+const consoleHistory = [];
 function log(text, cls) {
+  consoleHistory.push([Date.now(), text]);
   const span = document.createElement('span');
   span.textContent = text + '\n';
   if (cls) span.className = cls;
@@ -811,7 +814,21 @@ ui.motorStopBtn.addEventListener('click', () => send('--motor -stop'));
 ui.motorZeroBtn.addEventListener('click', () => {
   if (confirm('Treat the current motor position as CLOSED (0)?')) send('--motor -zero');
 });
-ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; });
+ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; consoleHistory.length = 0; });
+// Saves what the console shows (since the last Clear), one line per entry, local time + ms.
+ui.consoleDownloadBtn.addEventListener('click', () => {
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  const stamp = (ms) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+  };
+  const text = consoleHistory.map(([t, line]) => stamp(t) + '  ' + line).join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = 'ars_console_' + new Date().toISOString().replace(/[:.]/g, '-') + '.txt';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
 buildEventCheckboxes();
 
