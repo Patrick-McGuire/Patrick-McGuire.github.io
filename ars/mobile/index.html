@@ -213,7 +213,23 @@
       <label>Message</label>
       <input id="txMessage" type="number" min="0" max="65535" placeholder="0 – 65535" disabled>
       <button id="txSendBtn" disabled>Transmit</button>
+      <button id="txOwnIdBtn" disabled>Transmit this modem's ID</button>
       <span class="badge" id="txStatus"></span>
+    </div>
+  </section>
+
+  <section class="panel full" id="motorPanel">
+    <h2>Motor <span class="badge" id="motorState">—</span></h2>
+    <div class="row"><label>Position</label><span class="value" id="motorPos">—</span></div>
+    <div class="row"><label>Target</label><span class="value" id="motorTarget">—</span></div>
+    <div class="row"><label>Current</label><span class="value" id="motorCurrent">—</span></div>
+    <div class="row"><label>Encoder</label><span class="value" id="motorTach">—</span></div>
+    <div class="row"><label>Last wake</label><span class="value" id="motorWake">—</span></div>
+    <div class="toolbar">
+      <button id="motorOpenBtn" disabled>Open</button>
+      <button id="motorCloseBtn" disabled>Close</button>
+      <button id="motorStopBtn" disabled>Stop</button>
+      <button id="motorZeroBtn" disabled>Zero here (= closed)</button>
     </div>
   </section>
 
@@ -425,7 +441,10 @@ const ui = {
   deviceTime: $('deviceTime'), deviceUnix: $('deviceUnix'), timeDrift: $('timeDrift'),
   readTimeBtn: $('readTimeBtn'), syncTimeBtn: $('syncTimeBtn'), autoSyncTime: $('autoSyncTime'),
   battery: $('battery'), readBatBtn: $('readBatBtn'),
-  txMessage: $('txMessage'), txSendBtn: $('txSendBtn'), txStatus: $('txStatus'),
+  txMessage: $('txMessage'), txSendBtn: $('txSendBtn'), txStatus: $('txStatus'), txOwnIdBtn: $('txOwnIdBtn'),
+  motorPanel: $('motorPanel'), motorState: $('motorState'), motorPos: $('motorPos'), motorTarget: $('motorTarget'),
+  motorCurrent: $('motorCurrent'), motorTach: $('motorTach'), motorWake: $('motorWake'),
+  motorOpenBtn: $('motorOpenBtn'), motorCloseBtn: $('motorCloseBtn'), motorStopBtn: $('motorStopBtn'), motorZeroBtn: $('motorZeroBtn'),
   cfgVersion: $('cfgVersion'),
   cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'), cfgState: $('cfgState'),
   cfgEvents: $('cfgEvents'), cfgEventsCurrent: $('cfgEventsCurrent'),
@@ -484,9 +503,14 @@ function setConnected(connected) {
     ui.cfgId, ui.cfgSleep, ui.cfgAwake, ui.cfgState,
     ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn, ui.clearDeviceLogBtn,
     ui.consoleInput, ui.consoleSendBtn,
-    ui.txMessage, ui.txSendBtn,
+    ui.txMessage, ui.txSendBtn, ui.txOwnIdBtn,
+    ui.motorOpenBtn, ui.motorCloseBtn, ui.motorStopBtn, ui.motorZeroBtn,
   ];
   ctrls.forEach(el => el.disabled = !connected);
+  // Motor status poll (ITS_THAT_DEEP and later builds answer --motor; older ones just print an
+  // error, which is harmless). Once a second also keeps the Bluetooth link marked active.
+  clearInterval(state.motorPoll);
+  state.motorPoll = connected ? setInterval(() => sendQuiet('--motor'), 1000) : null;
   ui.autoSyncTime.disabled = connected;
   ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(el => el.disabled = !connected);
 }
@@ -723,6 +747,12 @@ async function send(cmd) {
   }
 }
 
+// Like send() but kept out of the console: for the periodic --motor poll.
+async function sendQuiet(cmd) {
+  if (!state.writer) return;
+  try { await state.writer.write(new TextEncoder().encode(cmd + '\n')); } catch (e) {}
+}
+
 // Retries a read-only "getter" command (--config/--time/--bat/--log) until
 // its response tag is actually seen, rather than assuming one send == one
 // answer. Needed because Bluetooth's raw UART link can drop/garble a command
@@ -750,8 +780,11 @@ function handleLine(line) {
   // High-volume LOGENTRY lines skip the console (already going to the table)
   // to avoid DOM pressure during large dumps that can stall the read loop.
   const isLogEntry = line.startsWith('MSG:\tLOGENTRY ');
+  // Motor status arrives every second; keep it out of the console unless it is an error.
+  const isMotor = line.startsWith('MSG:\tMOTOR ');
+  const isMotorPollNoise = /Invalid message: .*--motor/.test(line);
 
-  if (!isLogEntry) {
+  if (!isLogEntry && !isMotor && !isMotorPollNoise) {
     let cls = null;
     if (line.startsWith('ERROR:')) cls = 'err';
     else if (line.startsWith('WARN:')) cls = 'warn';
@@ -781,9 +814,20 @@ function handleLine(line) {
     case 'LOGCLEARED': handleLogCleared(); break;
     case 'TRANSMIT': handleTransmit(kv); break;
     case 'TRANSMITDONE': handleTransmitDone(); break;
+    case 'MOTOR': handleMotor(kv); break;
   }
   const ackKey = ACK_KEY_BY_TAG[tag];
   if (ackKey) state.ack[ackKey] = Date.now();
+}
+
+function handleMotor(kv) {
+  const num = (v, d) => (Number.isFinite(parseFloat(v)) ? parseFloat(v).toFixed(d) : '—');
+  ui.motorState.textContent = kv.state || '—';
+  ui.motorPos.textContent = (kv.pos ?? '—') + ' pulses';
+  ui.motorTarget.textContent = (kv.target ?? '—') + ' pulses';
+  ui.motorCurrent.textContent = num(kv.current, 3) + ' A';
+  ui.motorTach.textContent = num(kv.tach_hz, 1) + ' Hz  (duty ' + Math.round(100 * (parseFloat(kv.duty) || 0)) + '%)';
+  ui.motorWake.textContent = kv.wake || '—';
 }
 
 function handleTransmit(kv) {
@@ -1038,6 +1082,19 @@ ui.txSendBtn.addEventListener('click', () => {
   const v = parseInt(ui.txMessage.value, 10);
   if (!Number.isFinite(v) || v < 0 || v > 65535) return alert('Invalid message (0–65535)');
   send('--transmit ' + v);
+});
+// Sends the ID this modem is configured with (read from the last --config reply).
+ui.txOwnIdBtn.addEventListener('click', () => {
+  const id = state.config ? parseInt(state.config.id, 10) : NaN;
+  if (!Number.isFinite(id)) { sendUntilAcked('config'); return alert('Config not read yet - press again in a second'); }
+  ui.txMessage.value = id;
+  send('--transmit ' + id);
+});
+ui.motorOpenBtn.addEventListener('click', () => send('--motor -open'));
+ui.motorCloseBtn.addEventListener('click', () => send('--motor -close'));
+ui.motorStopBtn.addEventListener('click', () => send('--motor -stop'));
+ui.motorZeroBtn.addEventListener('click', () => {
+  if (confirm('Treat the current motor position as CLOSED (0)?')) send('--motor -zero');
 });
 ui.consoleClearBtn.addEventListener('click', () => { ui.console.innerHTML = ''; });
 
