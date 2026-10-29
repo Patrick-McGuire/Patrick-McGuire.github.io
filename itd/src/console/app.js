@@ -122,7 +122,7 @@ const ui = {
   motorPanel: $('motorPanel'), motorState: $('motorState'), motorPos: $('motorPos'), motorTarget: $('motorTarget'),
   motorCurrent: $('motorCurrent'), motorTach: $('motorTach'), motorWake: $('motorWake'), motorMode: $('motorMode'),
   motorOpenBtn: $('motorOpenBtn'), motorCloseBtn: $('motorCloseBtn'), motorStopBtn: $('motorStopBtn'), motorZeroBtn: $('motorZeroBtn'),
-  motorPot: $('motorPot'), motorJogPulses: $('motorJogPulses'), motorJogBtn: $('motorJogBtn'), motorBackBtn: $('motorBackBtn'),
+  motorJogPulses: $('motorJogPulses'), motorJogBtn: $('motorJogBtn'), motorBackBtn: $('motorBackBtn'),
   motorGotoPos: $('motorGotoPos'), motorGotoBtn: $('motorGotoBtn'),
   sleepNowSeconds: $('sleepNowSeconds'), sleepNowBtn: $('sleepNowBtn'),
   cfgVersion: $('cfgVersion'),
@@ -195,17 +195,14 @@ function setConnected(connected) {
   ctrls.forEach(el => el.disabled = !connected);
   // Motor status poll (ITS_THAT_DEEP and later builds answer --motor; older ones just print an
   // error, which is harmless): 4 Hz while the motor is moving, 1 Hz otherwise. Also keeps the
-  // Bluetooth link marked active. The pot is on the driver board rail, so it is only polled in
-  // UI mode (--pot does not extend UI mode when it is already on).
+  // Bluetooth link marked active.
   clearInterval(state.motorPoll);
   state.motorPollAt = 0;
-  state.motorMode = null;
   state.motorPoll = connected ? setInterval(() => {
     const moving = state.motorState === 'opening' || state.motorState === 'closing';
     if (!moving && Date.now() - state.motorPollAt < 1000) return;
     state.motorPollAt = Date.now();
     sendQuiet('--motor');
-    if (state.motorMode === 'ui') sendQuiet('--pot');
   }, 250) : null;
   ui.autoSyncTime.disabled = connected;
   ui.cfgEvents.querySelectorAll('input[type="checkbox"]').forEach(el => el.disabled = !connected);
@@ -477,8 +474,8 @@ function handleLine(line) {
   // to avoid DOM pressure during large dumps that can stall the read loop.
   const isLogEntry = line.startsWith('MSG:\tLOGENTRY ');
   // Motor status arrives every second; keep it out of the console unless it is an error.
-  const isMotor = line.startsWith('MSG:\tMOTOR ') || line.startsWith('MSG:\tPOT ');
-  const isMotorPollNoise = /Invalid message: .*--(motor|pot)/.test(line);
+  const isMotor = line.startsWith('MSG:\tMOTOR ');
+  const isMotorPollNoise = /Invalid message: .*--motor\s*$/.test(line);   // the bare poll only, not -jog etc.
   // UI log dumps (--uilog) go to whoever asked (the ITD page's motor log tab), not the console.
   const isUiLog = line.startsWith('MSG:\tUILOG ');
   if (isUiLog && window.ITD && window.ITD.onUiLogLine) window.ITD.onUiLogLine(line.slice('MSG:\tUILOG '.length));
@@ -514,7 +511,6 @@ function handleLine(line) {
     case 'TRANSMIT': handleTransmit(kv); break;
     case 'TRANSMITDONE': handleTransmitDone(); break;
     case 'MOTOR': handleMotor(kv); break;
-    case 'POT': handlePot(kv); break;
   }
   const ackKey = ACK_KEY_BY_TAG[tag];
   if (ackKey) state.ack[ackKey] = Date.now();
@@ -524,8 +520,6 @@ function handleMotor(kv) {
   const num = (v, d) => (Number.isFinite(parseFloat(v)) ? parseFloat(v).toFixed(d) : '—');
   ui.motorState.textContent = kv.state || '—';
   state.motorState = kv.state;
-  state.motorMode = kv.mode;
-  if (kv.mode !== 'ui') ui.motorPot.textContent = 'off (driver board rail is off outside UI mode)';
   if (ui.motorMode) {
     ui.motorMode.textContent = kv.mode === 'ui' ? 'UI (driver board on, mic off; ' + (kv.ui_left_s ?? '?') + ' s left)'
       : kv.mode === 'mic' ? 'Mic (listening + recording, driver board off)' : '—';
@@ -549,13 +543,6 @@ function handleMotor(kv) {
   }
   state.motorUp = up;
   ui.motorWake.textContent = (kv.wake || '—') + '  (last reset: ' + (kv.reset || '—') + ', up ' + (Number.isFinite(up) ? up + ' s' : '—') + ')';
-}
-
-// "POT connected=1" comes once per --pot, then "POT raw=... pos=..." (10 Hz with -watch).
-function handlePot(kv) {
-  if (kv.connected !== undefined) { state.potConnected = kv.connected === '1'; return; }
-  ui.motorPot.textContent = (kv.raw ?? '—') + ' / 1023  at ' + (kv.pos ?? '—') + ' pulses'
-    + (state.potConnected === false ? '  (not connected?)' : '');
 }
 
 function handleTransmit(kv) {
