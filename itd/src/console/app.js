@@ -567,7 +567,7 @@ function handlePot(kv) {
   // Builds with the pot as the reference add trusted/cal_*; cal_open < 0 = not calibrated yet.
   let cal = '';
   if (kv.cal_open !== undefined) {
-    cal = parseInt(kv.cal_open, 10) < 0 ? '  — not calibrated (Zero at closed, Open, then Cal open)'
+    cal = parseInt(kv.cal_open, 10) < 0 ? '  — not calibrated (Zero at closed, move to open, then Cal open)'
       : '  — cal ' + kv.cal_closed + '…' + kv.cal_open + (kv.trusted === '1' ? ', in use' : ', not usable here (encoder only)');
   }
   ui.motorPot.textContent = (kv.raw ?? '—') + ' / 1023  at ' + (kv.pos ?? '—') + ' pulses'
@@ -844,7 +844,7 @@ ui.motorOpenBtn.addEventListener('click', () => send('--motor -open'));
 ui.motorCloseBtn.addEventListener('click', () => send('--motor -close'));
 ui.motorStopBtn.addEventListener('click', () => send('--motor -stop'));
 ui.motorCalOpenBtn.addEventListener('click', () => {
-  if (confirm('Record the pot here as OPEN? (Zero at closed first, then Open, then this.)')) send('--motor -calopen');
+  if (confirm('Make HERE the open position, and record the pot here? (Zero at closed first, then move to where open should be, then this.)')) send('--motor -calopen');
 });
 const jogPulses = () => Math.max(1, Math.min(65535, parseInt(ui.motorJogPulses.value, 10) || 0));
 ui.motorJogBtn.addEventListener('click', () => send('--motor -jog ' + jogPulses()));
