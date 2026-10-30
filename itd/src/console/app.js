@@ -122,6 +122,7 @@ const ui = {
   motorPanel: $('motorPanel'), motorState: $('motorState'), motorPos: $('motorPos'), motorTarget: $('motorTarget'),
   motorCurrent: $('motorCurrent'), motorTach: $('motorTach'), motorWake: $('motorWake'), motorMode: $('motorMode'),
   motorOpenBtn: $('motorOpenBtn'), motorCloseBtn: $('motorCloseBtn'), motorStopBtn: $('motorStopBtn'), motorZeroBtn: $('motorZeroBtn'),
+  motorCalOpenBtn: $('motorCalOpenBtn'),
   motorPot: $('motorPot'), motorJogPulses: $('motorJogPulses'), motorJogBtn: $('motorJogBtn'), motorBackBtn: $('motorBackBtn'),
   motorGotoPos: $('motorGotoPos'), motorGotoBtn: $('motorGotoBtn'),
   sleepNowSeconds: $('sleepNowSeconds'), sleepNowBtn: $('sleepNowBtn'), keepUiMode: $('keepUiMode'),
@@ -188,7 +189,7 @@ function setConnected(connected) {
     ui.readLogCountBtn, ui.dumpLogBtn, ui.clearLogTableBtn, ui.clearDeviceLogBtn,
     ui.consoleInput, ui.consoleSendBtn,
     ui.txMessage, ui.txSendBtn, ui.txOwnIdBtn,
-    ui.motorOpenBtn, ui.motorCloseBtn, ui.motorStopBtn, ui.motorZeroBtn,
+    ui.motorOpenBtn, ui.motorCloseBtn, ui.motorStopBtn, ui.motorZeroBtn, ui.motorCalOpenBtn,
     ui.motorJogPulses, ui.motorJogBtn, ui.motorBackBtn, ui.motorGotoPos, ui.motorGotoBtn,
     ui.sleepNowSeconds, ui.sleepNowBtn, ui.keepUiMode,
   ];
@@ -546,7 +547,8 @@ function handleMotor(kv) {
     ui.motorTarget.textContent = num(kv.remaining_ms / 1000, 1) + ' s left';
     ui.motorTach.textContent = 'off  ' + duty;
   } else {
-    ui.motorPos.textContent = (kv.pos ?? '—') + ' pulses';
+    const SRC = { pot: 'from the pot', enc: 'encoder (pot not calibrated)', enc_pot_lost: 'encoder (pot lost)', pot_off: 'pot off outside UI mode' };
+    ui.motorPos.textContent = (kv.pos ?? '—') + ' pulses' + (kv.src ? '  (' + (SRC[kv.src] || kv.src) + ')' : '');
     ui.motorTarget.textContent = (kv.target ?? '—') + ' pulses';
     ui.motorTach.textContent = num(kv.tach_hz, 1) + ' Hz  ' + duty;
   }
@@ -563,8 +565,14 @@ function handleMotor(kv) {
 // "POT connected=1" comes once per --pot, then "POT raw=... pos=..." (10 Hz with -watch).
 function handlePot(kv) {
   if (kv.connected !== undefined) { state.potConnected = kv.connected === '1'; return; }
+  // Builds with the pot as the reference add trusted/cal_*; cal_open < 0 = not calibrated yet.
+  let cal = '';
+  if (kv.cal_open !== undefined) {
+    cal = parseInt(kv.cal_open, 10) < 0 ? '  — not calibrated (Zero at closed, Open, then Cal open)'
+      : '  — cal ' + kv.cal_closed + '…' + kv.cal_open + (kv.trusted === '1' ? ', in use' : ', not usable here (encoder only)');
+  }
   ui.motorPot.textContent = (kv.raw ?? '—') + ' / 1023  at ' + (kv.pos ?? '—') + ' pulses'
-    + (state.potConnected === false ? '  (not connected?)' : '');
+    + (state.potConnected === false ? '  (not connected?)' : '') + cal;
 }
 
 function handleTransmit(kv) {
@@ -836,6 +844,9 @@ ui.sleepNowBtn.addEventListener('click', () => {
 ui.motorOpenBtn.addEventListener('click', () => send('--motor -open'));
 ui.motorCloseBtn.addEventListener('click', () => send('--motor -close'));
 ui.motorStopBtn.addEventListener('click', () => send('--motor -stop'));
+ui.motorCalOpenBtn.addEventListener('click', () => {
+  if (confirm('Record the pot here as OPEN? (Zero at closed first, then Open, then this.)')) send('--motor -calopen');
+});
 const jogPulses = () => Math.max(1, Math.min(65535, parseInt(ui.motorJogPulses.value, 10) || 0));
 ui.motorJogBtn.addEventListener('click', () => send('--motor -jog ' + jogPulses()));
 ui.motorBackBtn.addEventListener('click', () => send('--motor -back ' + jogPulses()));
