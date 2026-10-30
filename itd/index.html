@@ -523,7 +523,7 @@ body.itd{display:flex;flex-direction:column;background:#0b0e12;color:#e6e6e6;
     <div class="row"><label>Encoder</label><span class="value" id="motorTach">—</span></div>
     <div class="row"><label>Pot</label><span class="value" id="motorPot">—</span></div>
     <div class="row"><label>Mode</label><span class="value" id="motorMode">—</span></div>
-    <label class="checkline"><input id="keepUiMode" type="checkbox" disabled> Keep UI mode on (sends --mode -ui every 20 s; untick to let it time out)</label>
+    <label class="checkline"><input id="keepUiMode" type="checkbox" checked disabled> Keep UI mode on while connected (sends --mode -ui every 20 s, USB or Bluetooth; untick to let it time out)</label>
     <div class="row"><label>Last wake</label><span class="value" id="motorWake">—</span></div>
     <div class="toolbar">
       <button id="motorOpenBtn" disabled>Open</button>
@@ -986,7 +986,6 @@ function setConnected(connected) {
   state.motorPollAt = 0;
   state.motorMode = null;
   state.keepUiAt = 0;
-  if (!connected) ui.keepUiMode.checked = false;
   state.motorPoll = connected ? setInterval(() => {
     if (ui.keepUiMode.checked && Date.now() - state.keepUiAt >= 20000) {
       state.keepUiAt = Date.now();

@@ -203,7 +203,6 @@ function setConnected(connected) {
   state.motorPollAt = 0;
   state.motorMode = null;
   state.keepUiAt = 0;
-  if (!connected) ui.keepUiMode.checked = false;
   state.motorPoll = connected ? setInterval(() => {
     if (ui.keepUiMode.checked && Date.now() - state.keepUiAt >= 20000) {
       state.keepUiAt = Date.now();
