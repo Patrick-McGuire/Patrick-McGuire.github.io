@@ -124,7 +124,7 @@ const ui = {
   motorOpenBtn: $('motorOpenBtn'), motorCloseBtn: $('motorCloseBtn'), motorStopBtn: $('motorStopBtn'), motorZeroBtn: $('motorZeroBtn'),
   motorPot: $('motorPot'), motorJogPulses: $('motorJogPulses'), motorJogBtn: $('motorJogBtn'), motorBackBtn: $('motorBackBtn'),
   motorGotoPos: $('motorGotoPos'), motorGotoBtn: $('motorGotoBtn'),
-  sleepNowSeconds: $('sleepNowSeconds'), sleepNowBtn: $('sleepNowBtn'),
+  sleepNowSeconds: $('sleepNowSeconds'), sleepNowBtn: $('sleepNowBtn'), keepUiMode: $('keepUiMode'),
   cfgVersion: $('cfgVersion'),
   cfgId: $('cfgId'), cfgSleep: $('cfgSleep'), cfgAwake: $('cfgAwake'), cfgState: $('cfgState'),
   cfgEvents: $('cfgEvents'), cfgEventsCurrent: $('cfgEventsCurrent'),
@@ -190,17 +190,24 @@ function setConnected(connected) {
     ui.txMessage, ui.txSendBtn, ui.txOwnIdBtn,
     ui.motorOpenBtn, ui.motorCloseBtn, ui.motorStopBtn, ui.motorZeroBtn,
     ui.motorJogPulses, ui.motorJogBtn, ui.motorBackBtn, ui.motorGotoPos, ui.motorGotoBtn,
-    ui.sleepNowSeconds, ui.sleepNowBtn,
+    ui.sleepNowSeconds, ui.sleepNowBtn, ui.keepUiMode,
   ];
   ctrls.forEach(el => el.disabled = !connected);
   // Motor status poll (ITS_THAT_DEEP and later builds answer --motor; older ones just print an
   // error, which is harmless): 4 Hz while the motor is moving, 1 Hz otherwise. Also keeps the
   // Bluetooth link marked active. The pot is on the driver board rail, so it is only polled in
-  // UI mode (--pot does not extend UI mode when it is already on).
+  // UI mode (--pot does not extend UI mode when it is already on). "Keep UI mode on" re-sends
+  // --mode -ui every 20 s, inside the board's 35 s UI timeout.
   clearInterval(state.motorPoll);
   state.motorPollAt = 0;
   state.motorMode = null;
+  state.keepUiAt = 0;
+  if (!connected) ui.keepUiMode.checked = false;
   state.motorPoll = connected ? setInterval(() => {
+    if (ui.keepUiMode.checked && Date.now() - state.keepUiAt >= 20000) {
+      state.keepUiAt = Date.now();
+      sendQuiet('--mode -ui');
+    }
     const moving = state.motorState === 'opening' || state.motorState === 'closing';
     if (!moving && Date.now() - state.motorPollAt < 1000) return;
     state.motorPollAt = Date.now();
@@ -483,7 +490,9 @@ function handleLine(line) {
   const isUiLog = line.startsWith('MSG:\tUILOG ');
   if (isUiLog && window.ITD && window.ITD.onUiLogLine) window.ITD.onUiLogLine(line.slice('MSG:\tUILOG '.length));
 
-  if (!isLogEntry && !isMotor && !isMotorPollNoise && !isUiLog) {
+  // The reply to a "Keep UI mode on" --mode -ui, not to one typed in the console.
+  const isKeepUiReply = line.startsWith('MSG:\tMODE ') && Date.now() - state.keepUiAt < 3000;
+  if (!isLogEntry && !isMotor && !isMotorPollNoise && !isUiLog && !isKeepUiReply) {
     let cls = null;
     if (line.startsWith('ERROR:')) cls = 'err';
     else if (line.startsWith('WARN:')) cls = 'warn';
