@@ -1,0 +1,72 @@
+<div class="wrap">
+
+  <header>
+    <h1>buzzer sorter</h1>
+    <span class="dot" id="bs-dot"></span>
+    <span class="conn" id="bs-conn">not connected</span>
+    <span class="spacer"></span>
+    <button id="bs-connect">Connect</button>
+  </header>
+
+  <div class="banner warn hide" id="bs-banner">
+    <span class="icon" aria-hidden="true">⚠</span><span id="bs-banner-text"></span>
+  </div>
+
+  <div class="main">
+    <div class="card verdict" id="bs-verdict" data-type="">
+      <div class="kicker">Type</div>
+      <div class="letter" id="bs-letter">–</div>
+      <div class="sub" id="bs-sub">Connect the board, then turn the pulses on.</div>
+    </div>
+
+    <div class="card controls">
+      <div class="lbl">Pulses</div>
+      <div class="toggle">
+        <button id="bs-on" aria-pressed="false">ON</button>
+        <button id="bs-off" class="off" aria-pressed="true">OFF</button>
+      </div>
+      <button id="bs-once">Measure once</button>
+      <div class="note" id="bs-note">The buzzer is silent while this is OFF.</div>
+    </div>
+  </div>
+
+  <div class="card stats" id="bs-stats">
+    <div class="stat"><div class="v" id="bs-s-snr">–</div><div class="k">signal / noise</div></div>
+    <div class="stat"><div class="v" id="bs-s-mirror">–</div><div class="k">mirror quality</div></div>
+    <div class="stat"><div class="v" id="bs-s-onset">–</div><div class="k">onset sample</div></div>
+    <div class="stat"><div class="v" id="bs-s-agree">–</div><div class="k">readings agreeing</div></div>
+    <div class="stat"><div class="v" id="bs-s-wiring">–</div><div class="k">forward drive state</div></div>
+  </div>
+
+  <div class="card">
+    <div class="chart-head">
+      <h2>Pressure at the mic after the drive edge</h2>
+      <span class="spacer"></span>
+      <div class="seg">
+        <button id="bs-v-onset" aria-pressed="true">Onset</button>
+        <button id="bs-v-full" aria-pressed="false">Full window</button>
+      </div>
+    </div>
+    <p class="caption" id="bs-caption">Forward drive minus reverse drive, averaged. The sign of the
+      first swing is the answer.</p>
+    <div class="plot" id="bs-plot">
+      <svg id="bs-svg" role="img" aria-labelledby="bs-svg-title"><title id="bs-svg-title">Averaged
+        microphone response after the H-bridge drive edge</title></svg>
+      <div class="tip" id="bs-tip"><span class="tv" id="bs-tip-v"></span>
+        <span class="tk" id="bs-tip-k"></span></div>
+    </div>
+    <details>
+      <summary>Numbers</summary>
+      <table class="nums"><thead><tr><th>Sample</th><th>Value</th></tr></thead>
+        <tbody id="bs-nums"></tbody></table>
+    </details>
+  </div>
+
+  <details class="card">
+    <summary>Serial log</summary>
+    <div class="log" id="bs-log"></div>
+  </details>
+
+  <p class="hint" id="bs-hint"></p>
+</div>
+

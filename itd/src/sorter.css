@@ -1,0 +1,142 @@
+  /* Dark only, as the rest of the ITD site (the standalone page also had a light theme). */
+  :root {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted:          #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255, 255, 255, 0.10);
+    --type-a:         #3987e5;
+    --type-b:         #d95926;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #d03b3b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 20px 48px;
+    background: var(--plane);
+    color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  header .spacer { flex: 1; }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--axis); flex: none; }
+  .dot.live { background: var(--good); }
+  .conn { color: var(--text-secondary); font-size: 13px; }
+
+  button {
+    font: inherit; color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--axis); }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  /* ---- the readout ---------------------------------------------------- */
+  .main { display: grid; grid-template-columns: 1fr 240px; gap: 16px; align-items: stretch; }
+  @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
+
+  .verdict {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 28px 20px; min-height: 260px;
+  }
+  .verdict .kicker {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .verdict .letter {
+    font-size: clamp(88px, 20vw, 150px); font-weight: 700; line-height: 1;
+    margin: 4px 0 10px; letter-spacing: -0.03em;
+  }
+  .verdict[data-type="A"] .letter { color: var(--type-a); }
+  .verdict[data-type="B"] .letter { color: var(--type-b); }
+  .verdict[data-type="?"] .letter { color: var(--warning); font-size: clamp(64px, 14vw, 110px); }
+  .verdict .sub { color: var(--text-secondary); font-size: 14px; max-width: 34ch; }
+
+  /* ---- controls -------------------------------------------------------- */
+  .controls { display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .controls .lbl {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: -2px;
+  }
+  .toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .toggle button {
+    padding: 16px 0; font-size: 16px; font-weight: 600; letter-spacing: 0.04em;
+  }
+  .toggle button[aria-pressed="true"] {
+    background: var(--good); border-color: var(--good); color: #fff;
+  }
+  .toggle button.off[aria-pressed="true"] {
+    background: var(--text-secondary); border-color: var(--text-secondary); color: var(--surface-1);
+  }
+  .controls .note { font-size: 12px; color: var(--muted); }
+
+  /* ---- stats ----------------------------------------------------------- */
+  .stats { display: flex; flex-wrap: wrap; gap: 28px; padding: 16px 20px; }
+  .stat .v { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat .k { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+  .banner {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 12px 14px; border-radius: 8px; font-size: 14px;
+    border: 1px solid var(--border); margin-bottom: 16px;
+  }
+  .banner .icon { flex: none; font-size: 15px; line-height: 1.4; }
+  .banner.warn { border-color: var(--warning); }
+  .banner.bad  { border-color: var(--critical); }
+  .banner.hide { display: none; }
+
+  /* ---- chart ----------------------------------------------------------- */
+  .chart-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+  .chart-head h2 { font-size: 14px; font-weight: 600; margin: 0; }
+  .chart-head .spacer { flex: 1; }
+  .seg { display: flex; gap: 4px; }
+  .seg button { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+  .seg button[aria-pressed="true"] { border-color: var(--axis); background: var(--plane); }
+  .caption { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .plot { position: relative; }
+  .plot svg { display: block; width: 100%; height: auto; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 8px; font-size: 12px; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10); transition: opacity 80ms;
+  }
+  .tip .tv { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tip .tk { color: var(--muted); }
+
+  details { margin-top: 4px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+  .log, table.nums {
+    margin-top: 10px; font-size: 12px; font-variant-numeric: tabular-nums;
+    max-height: 240px; overflow: auto;
+  }
+  .log { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace;
+         color: var(--text-secondary); }
+  table.nums { border-collapse: collapse; width: 100%; display: block; }
+  table.nums th, table.nums td { text-align: right; padding: 2px 8px; }
+  table.nums th { color: var(--muted); font-weight: 500; position: sticky; top: 0;
+                  background: var(--surface-1); }
+  .hint { font-size: 13px; color: var(--text-secondary); }

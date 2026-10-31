@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Assemble itd/index.html: one page, three tabs.
+"""Assemble itd/index.html: one page, four tabs.
 
   Console    the ARS console (src/console/), Web Serial + Web Bluetooth
   Audio      the capture viewer (src/viewer.*), SD .BIN and field-tool captures
   Motor log  the UI-mode motor log viewer (src/uilog.*)
+  Buzzer sorter  the transducer polarity (type A / B) bench readout for the v3_buzzer_polarity
+             firmware (src/sorter.*), its own Web Serial port
 
 The tools were written as whole pages, so their stylesheets target html/body/header/main and
 their scripts declare top-level names (both define `$`). To share one document, every
@@ -115,12 +117,14 @@ def main() -> None:
         "@media (max-width: 760px) {\n" + scope_css(read(ARS / "app-mobile.css"), "#tab-console") + "}\n",
         scope_css(read(SRC / "viewer.css"), "#tab-audio"),
         scope_css(read(SRC / "uilog.css"), "#tab-motorlog"),
+        scope_css(read(SRC / "sorter.css"), "#tab-sorter"),
     ])
     scripts = "\n".join([
         read(SRC / "shell.js"),
         wrap_js(read(ARS / "app.js"), "console (src/console/app.js)"),
         wrap_js(read(SRC / "viewer.js"), "audio viewer"),
         wrap_js(read(SRC / "uilog.js"), "motor log"),
+        wrap_js(read(SRC / "sorter.js"), "buzzer sorter"),
         read(SRC / "tabs.js"),
     ])
     html = f"""<!doctype html>
@@ -133,7 +137,7 @@ def main() -> None:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ITD Tools</title>
-<meta name="description" content="It's That Deep: acoustic release console, capture viewer and motor log">
+<meta name="description" content="It's That Deep: acoustic release console, capture viewer, motor log and buzzer sorter">
 <meta name="theme-color" content="#07090c">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -148,6 +152,7 @@ def main() -> None:
   <button class="itd-tab" role="tab" data-tab="console" aria-controls="tab-console">Console</button>
   <button class="itd-tab" role="tab" data-tab="audio" aria-controls="tab-audio">Audio viewer</button>
   <button class="itd-tab" role="tab" data-tab="motorlog" aria-controls="tab-motorlog">Motor log</button>
+  <button class="itd-tab" role="tab" data-tab="sorter" aria-controls="tab-sorter">Buzzer sorter</button>
   <span class="itd-conn" id="itdConn"><i></i> disconnected</span>
 </nav>
 <section class="itd-panel" id="tab-console" role="tabpanel" aria-label="Console">
@@ -158,6 +163,9 @@ def main() -> None:
 </section>
 <section class="itd-panel" id="tab-motorlog" role="tabpanel" aria-label="Motor log" hidden>
 {html_part(SRC / "uilog.html")}
+</section>
+<section class="itd-panel" id="tab-sorter" role="tabpanel" aria-label="Buzzer sorter" hidden>
+{html_part(SRC / "sorter.html")}
 </section>
 <script>
 {scripts}
