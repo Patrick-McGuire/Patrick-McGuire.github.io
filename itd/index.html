@@ -338,7 +338,7 @@ body.itd{display:flex;flex-direction:column;background:#0b0e12;color:#e6e6e6;
 #tab-audio .grp {display:flex;align-items:center;gap:5px;min-width:0}
 #tab-audio .grp>.lbl {font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--fg-faint);margin-right:2px}
 #tab-audio .row {display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-#tab-audio button, #tab-audio input[type=number] {font-family:var(--sans);font-size:12px;color:var(--fg);
+#tab-audio button, #tab-audio select, #tab-audio input[type=number] {font-family:var(--sans);font-size:12px;color:var(--fg);
   background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:5px 9px}
 #tab-audio button {cursor:pointer;white-space:nowrap}
 #tab-audio button:hover {border-color:var(--accent)}
@@ -764,18 +764,27 @@ body.itd{display:flex;flex-direction:column;background:#0b0e12;color:#e6e6e6;
 <header>
   <!-- One row of inline-labelled groups; wraps only on narrow screens. -->
   <div class="grp">
-    <label class="pick" id="pickLbl" title="SD card NNNNN.BIN (+ an event log CSV), or field-tool .bin/.log pairs">Load files
-      <input type="file" id="pick" accept=".bin,.log,.txt,.csv" multiple></label>
+    <label class="pick" id="pickLbl" title="SD card NNNNN.WAV or older NNNNN.BIN (+ an event log CSV), or field-tool .bin/.log pairs">Load files
+      <input type="file" id="pick" accept=".wav,.bin,.log,.txt,.csv" multiple></label>
     <button id="useConsoleLog" disabled title="Overlay the event log dumped in the Console tab">Console event log</button>
   </div>
 
   <div class="grp">
     <span class="lbl">Band</span>
-    <button id="bProto" aria-pressed="true">7.5&ndash;9.5k</button>
+    <button id="bProto" aria-pressed="true" title="the 8.5 kHz protocol">7.5&ndash;9.5k</button>
+    <button id="bP4k" aria-pressed="false" title="the 4 kHz protocol">3.5&ndash;4.5k</button>
     <button id="bFull" aria-pressed="false">0&ndash;20k</button>
     <input type="number" id="fLo" value="7500" min="0" max="25000" step="100" aria-label="Band low Hz">
     <input type="number" id="fHi" value="9500" min="0" max="25000" step="100" aria-label="Band high Hz">
     <span class="hint">Hz</span>
+  </div>
+
+  <div class="grp">
+    <label class="lbl" for="binRate" title="A raw .bin carries no sample rate (a .wav does)">.bin rate</label>
+    <select id="binRate" aria-label="Sample rate for raw .bin files">
+      <option value="50000">50 kHz (8.5k builds)</option>
+      <option value="25000">25 kHz (4k builds)</option>
+    </select>
   </div>
 
   <div class="grp">
@@ -810,7 +819,7 @@ body.itd{display:flex;flex-direction:column;background:#0b0e12;color:#e6e6e6;
     <div class="cwrap"><canvas></canvas><div class="over" data-role="over">
       <svg class="itd-logo-full" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="30 31 337 192" role="img" aria-label="ITD - It's That Deep"><title>ITD - It's That Deep</title><path fill="currentColor" d="M324 33h1v1h-1zM325 34h2v1h-2zM325 35h3v1h-3zM326 36h4v1h-4zM327 37h4v1h-4zM328 38h4v1h-4zM329 39h4v1h-4zM330 40h4v1h-4zM302 41h1v1h-1zM330 41h5v1h-5zM68 42h24v1h-24zM107 42h86v1h-86zM203 42h57v1h-57zM303 42h2v1h-2zM331 42h5v1h-5zM68 43h25v40h-25zM106 43h87v4h-87zM202 43h63v1h-63zM304 43h3v1h-3zM332 43h5v1h-5zM202 44h66v1h-66zM305 44h3v1h-3zM333 44h4v1h-4zM202 45h68v1h-68zM306 45h3v1h-3zM333 45h5v1h-5zM202 46h70v1h-70zM307 46h3v1h-3zM334 46h5v1h-5zM105 47h88v16h-88zM202 47h73v1h-73zM307 47h4v1h-4zM335 47h5v1h-5zM202 48h75v1h-75zM308 48h5v1h-5zM335 48h6v1h-6zM202 49h77v1h-77zM309 49h5v1h-5zM336 49h5v1h-5zM202 50h79v1h-79zM310 50h4v1h-4zM337 50h5v1h-5zM202 51h80v1h-80zM311 51h4v1h-4zM337 51h6v1h-6zM202 52h81v1h-81zM312 52h4v1h-4zM338 52h5v1h-5zM202 53h83v1h-83zM312 53h5v1h-5zM339 53h5v2h-5zM202 54h84v1h-84zM313 54h5v1h-5zM202 55h85v1h-85zM314 55h5v2h-5zM340 55h5v1h-5zM202 56h86v1h-86zM340 56h6v1h-6zM202 57h87v1h-87zM315 57h5v1h-5zM341 57h5v1h-5zM202 58h88v1h-88zM316 58h5v1h-5zM341 58h6v1h-6zM202 59h89v1h-89zM316 59h6v1h-6zM342 59h5v1h-5zM202 60h90v1h-90zM317 60h5v1h-5zM342 60h6v1h-6zM202 61h91v1h-91zM317 61h6v1h-6zM343 61h5v1h-5zM202 62h92v2h-92zM318 62h5v1h-5zM343 62h6v2h-6zM106 63h87v2h-87zM319 63h5v1h-5zM203 64h92v1h-92zM319 64h6v1h-6zM344 64h6v2h-6zM138 65h24v18h-24zM256 65h40v1h-40zM320 65h5v1h-5zM260 66h37v1h-37zM320 66h6v1h-6zM345 66h5v1h-5zM262 67h35v1h-35zM321 67h5v1h-5zM345 67h6v2h-6zM264 68h34v1h-34zM321 68h6v1h-6zM266 69h32v1h-32zM322 69h5v2h-5zM346 69h5v2h-5zM268 70h31v1h-31zM269 71h30v1h-30zM323 71h5v2h-5zM347 71h5v2h-5zM271 72h29v1h-29zM272 73h29v1h-29zM323 73h6v1h-6zM347 73h6v2h-6zM273 74h28v1h-28zM324 74h5v1h-5zM274 75h28v1h-28zM324 75h6v3h-6zM348 75h5v1h-5zM275 76h27v1h-27zM348 76h6v4h-6zM276 77h26v1h-26zM277 78h25v1h-25zM325 78h5v1h-5zM277 79h26v1h-26zM325 79h6v2h-6zM278 80h25v1h-25zM349 80h5v1h-5zM279 81h24v1h-24zM326 81h5v2h-5zM349 81h6v2h-6zM279 82h25v1h-25zM68 84h25v2h-25zM138 84h24v2h-24zM280 84h25v2h-25zM326 84h6v1h-6zM349 84h6v1h-6zM327 85h5v1h-5zM350 85h5v1h-5zM68 88h25v1h-25zM138 88h24v1h-24zM282 88h23v1h-23zM327 88h6v1h-6zM350 88h6v1h-6zM68 97h25v61h-25zM138 97h24v61h-24zM284 97h22v9h-22zM328 97h6v6h-6zM351 97h5v11h-5zM328 103h5v6h-5zM283 106h23v4h-23zM350 108h6v3h-6zM327 109h6v3h-6zM282 110h24v1h-24zM282 111h23v2h-23zM350 111h5v3h-5zM327 112h5v3h-5zM281 113h24v3h-24zM349 114h6v4h-6zM326 115h6v2h-6zM280 116h24v2h-24zM326 117h5v1h-5zM280 118h23v1h-23zM325 118h6v3h-6zM349 118h5v1h-5zM279 119h24v1h-24zM348 119h6v3h-6zM278 120h25v1h-25zM278 121h24v1h-24zM325 121h5v2h-5zM277 122h25v1h-25zM348 122h5v2h-5zM276 123h26v2h-26zM324 123h6v1h-6zM324 124h5v2h-5zM347 124h6v2h-6zM275 125h26v1h-26zM274 126h27v1h-27zM323 126h6v1h-6zM347 126h5v2h-5zM273 127h27v1h-27zM323 127h5v2h-5zM272 128h28v1h-28zM346 128h5v2h-5zM271 129h28v1h-28zM322 129h5v2h-5zM269 130h29v1h-29zM345 130h6v1h-6zM268 131h30v1h-30zM321 131h5v2h-5zM345 131h5v2h-5zM266 132h31v1h-31zM264 133h33v1h-33zM320 133h6v1h-6zM344 133h6v1h-6zM262 134h34v1h-34zM320 134h5v1h-5zM344 134h5v1h-5zM258 135h38v1h-38zM319 135h5v2h-5zM343 135h6v1h-6zM203 136h92v1h-92zM343 136h5v2h-5zM202 137h92v1h-92zM318 137h5v2h-5zM202 138h91v2h-91zM342 138h5v2h-5zM317 139h5v1h-5zM202 140h90v1h-90zM316 140h5v2h-5zM341 140h5v2h-5zM202 141h89v1h-89zM202 142h88v1h-88zM315 142h5v1h-5zM340 142h5v2h-5zM202 143h87v1h-87zM315 143h4v1h-4zM202 144h86v1h-86zM314 144h4v1h-4zM339 144h5v1h-5zM202 145h85v1h-85zM313 145h5v1h-5zM339 145h4v1h-4zM202 146h83v1h-83zM312 146h5v1h-5zM338 146h5v1h-5zM202 147h82v1h-82zM312 147h4v1h-4zM337 147h5v2h-5zM202 148h81v1h-81zM311 148h4v1h-4zM202 149h80v1h-80zM310 149h4v1h-4zM336 149h5v1h-5zM202 150h78v1h-78zM309 150h4v1h-4zM335 150h5v1h-5zM202 151h77v1h-77zM308 151h4v1h-4zM335 151h4v1h-4zM202 152h75v1h-75zM307 152h4v1h-4zM334 152h4v1h-4zM202 153h73v1h-73zM307 153h3v1h-3zM333 153h5v1h-5zM202 154h71v1h-71zM306 154h3v1h-3zM332 154h5v1h-5zM202 155h72v1h-72zM305 155h2v1h-2zM332 155h4v1h-4zM202 156h73v1h-73zM304 156h2v1h-2zM331 156h4v1h-4zM202 157h62v1h-62zM265 157h10v1h-10zM303 157h2v1h-2zM330 157h4v1h-4zM68 158h24v1h-24zM138 158h23v1h-23zM203 158h56v1h-56zM265 158h4v4h-4zM272 158h3v4h-3zM329 158h4v1h-4zM328 159h4v1h-4zM328 160h3v1h-3zM327 161h3v1h-3zM265 162h10v2h-10zM326 162h3v1h-3zM325 163h2v1h-2zM266 164h9v1h-9zM325 164h1v1h-1zM267 171h7v1h-7zM265 175h4v4h-4zM272 175h3v4h-3zM265 179h10v1h-10zM266 180h9v1h-9zM266 181h8v1h-8zM267 182h6v1h-6zM268 183h5v4h-5zM265 187h11v1h-11zM265 188h13v1h-13zM264 189h14v2h-14zM101 191h5v1h-5zM150 191h1v1h-1zM264 191h15v5h-15zM32 192h6v24h-6zM48 192h19v5h-19zM78 192h5v1h-5zM98 192h11v1h-11zM137 192h18v1h-18zM166 192h4v1h-4zM180 192h5v1h-5zM203 192h7v2h-7zM223 192h19v5h-19zM293 192h15v1h-15zM320 192h16v1h-16zM347 192h13v1h-13zM77 193h6v1h-6zM97 193h13v1h-13zM136 193h20v3h-20zM165 193h6v8h-6zM179 193h6v8h-6zM292 193h17v3h-17zM320 193h17v3h-17zM347 193h15v1h-15zM77 194h7v3h-7zM96 194h15v1h-15zM202 194h8v1h-8zM346 194h17v2h-17zM95 195h17v2h-17zM202 195h9v1h-9zM136 196h19v1h-19zM201 196h10v2h-10zM264 196h16v4h-16zM292 196h16v1h-16zM320 196h16v1h-16zM346 196h18v1h-18zM55 197h6v18h-6zM78 197h6v1h-6zM94 197h7v3h-7zM106 197h7v1h-7zM143 197h6v19h-6zM229 197h7v1h-7zM292 197h6v4h-6zM320 197h6v4h-6zM346 197h7v1h-7zM357 197h7v1h-7zM79 198h4v1h-4zM107 198h6v1h-6zM201 198h11v2h-11zM230 198h6v17h-6zM346 198h6v5h-6zM358 198h7v1h-7zM78 199h5v1h-5zM107 199h5v1h-5zM359 199h6v3h-6zM77 200h5v1h-5zM94 200h8v1h-8zM200 200h6v3h-6zM207 200h6v3h-6zM264 200h17v6h-17zM77 201h4v1h-4zM95 201h10v1h-10zM165 201h20v6h-20zM292 201h15v1h-15zM320 201h14v1h-14zM95 202h13v1h-13zM292 202h16v4h-16zM320 202h15v4h-15zM358 202h7v1h-7zM96 203h15v1h-15zM199 203h6v2h-6zM208 203h6v3h-6zM346 203h18v2h-18zM97 204h15v1h-15zM98 205h14v1h-14zM198 205h7v2h-7zM346 205h17v1h-17zM101 206h12v1h-12zM208 206h7v1h-7zM264 206h18v7h-18zM292 206h15v1h-15zM320 206h14v1h-14zM346 206h16v1h-16zM105 207h8v1h-8zM165 207h7v1h-7zM179 207h6v9h-6zM197 207h18v2h-18zM292 207h6v4h-6zM320 207h6v4h-6zM346 207h15v1h-15zM95 208h4v1h-4zM107 208h6v3h-6zM165 208h6v8h-6zM346 208h13v1h-13zM94 209h5v1h-5zM197 209h19v1h-19zM346 209h7v1h-7zM94 210h6v1h-6zM196 210h20v1h-20zM346 210h6v5h-6zM94 211h9v1h-9zM104 211h9v1h-9zM196 211h21v1h-21zM292 211h16v1h-16zM320 211h16v2h-16zM95 212h18v1h-18zM196 212h6v1h-6zM210 212h7v1h-7zM292 212h17v4h-17zM95 213h17v1h-17zM195 213h7v1h-7zM211 213h6v1h-6zM264 213h19v5h-19zM320 213h17v2h-17zM96 214h15v1h-15zM195 214h6v2h-6zM211 214h7v1h-7zM55 215h5v2h-5zM97 215h13v1h-13zM212 215h6v1h-6zM230 215h5v1h-5zM320 215h16v2h-16zM347 215h5v1h-5zM33 216h4v1h-4zM99 216h9v1h-9zM143 216h5v1h-5zM166 216h4v1h-4zM180 216h5v1h-5zM196 216h4v1h-4zM212 216h5v1h-5zM231 216h4v1h-4zM293 216h15v1h-15zM347 216h4v1h-4zM264 218h18v1h-18zM264 219h17v1h-17zM265 220h14v1h-14z"/></svg>
       <b>Load captures to begin</b>
-      <span>SD card <code>NNNNN.BIN</code> (+ event log CSV) &middot; field-tool <code>.bin</code> + <code>.log</code></span>
+      <span>SD card <code>NNNNN.WAV</code> or <code>.BIN</code> (+ event log CSV) &middot; field-tool <code>.bin</code> + <code>.log</code></span>
       <span>Wheel zooms &middot; shift = time only &middot; ctrl = frequency only &middot; drag pans</span>
       <div class="bar" data-role="bar" hidden><i></i></div>
     </div></div>
@@ -1901,8 +1910,11 @@ const apiSupportTimer = setInterval(() => {
    STFT settings are field_tool/app.py's, so the picture matches the live monitor:
    512-sample Hann, 75% overlap, 4x zero pad, dB = 20log10(|S| + 1e-6), inferno.
 --------------------------------------------------------------------------------------------- */
-const FS=50000, NWIN=512, ZPAD=4, NFFT=NWIN*ZPAD, DF=FS/NFFT;
-const NYQ=FS/2, CACHE_BINS=Math.floor(NYQ/DF);        // whole spectrum, 0..25 kHz
+// The sample rate is per file (p.fs): an SD NNNNN.WAV carries it in its header; a raw .bin is
+// read at the ".bin rate" picker (50 kHz for the 8.5 kHz builds, 25 kHz for the 4 kHz ones).
+// The bins always run DC..Nyquist, so only their width (p.fs/NFFT) depends on the file.
+const NWIN=512, ZPAD=4, NFFT=NWIN*ZPAD;
+const CACHE_BINS=NFFT/2;                              // whole spectrum, 0..Nyquist
 const CACHE_HOP=1024;                                 // 20.5 ms columns; see buildIndex()
 const DB_LO=-40, DB_HI=120, DB_SPAN=DB_HI-DB_LO;      // Uint8 quantisation, 0.63 dB a step
 
@@ -1975,7 +1987,7 @@ function parseLog(text){
 }
 
 /* ---------------------------------------------------------------------------------------------
-   Device event log (the Console tab's dump, or its "Download CSV") -> marks on an SD NNNNN.BIN.
+   Device event log (the Console tab's dump, or its "Download CSV") -> marks on an SD NNNNN.WAV (or .BIN).
    BOOT (6) and RECORD_START (7) entries carry the number of the file they opened, so every entry
    after one, up to the next, happened during that recording. Entry times are whole RTC seconds:
    the marks are good to about +-1 s.
@@ -2013,7 +2025,7 @@ function applyDeviceLog(){
   if(!deviceLog) return;
   const notes=[];
   for(const p of panes){
-    const m=p.fileName.match(/^(\d{1,5})\.BIN$/i);
+    const m=p.fileName.match(/^(\d{1,5})\.(BIN|WAV)$/i);
     if(!m || (p.log && !p.log.fromDevice)) continue;
     const ev=eventsForFile(deviceLog,parseInt(m[1],10));
     p.log=ev; p.logName=ev?deviceLogName:"";
@@ -2026,13 +2038,13 @@ function applyDeviceLog(){
 }
 
 /* ---- state ---- */
-const PRESETS={proto:[7500,9500], full:[0,20000]};
+const PRESETS={proto:[7500,9500], p4k:[3500,4500], full:[0,20000]};
 const st={t0:0, span:20, fLo:7500, fHi:9500, gain:0, events:true, link:true};
 const panes=[...document.querySelectorAll(".pane")].map(el=>({
   el, canvas:el.querySelector("canvas"), ctx:el.querySelector("canvas").getContext("2d",{alpha:false}),
   over:el.querySelector('[data-role=over]'), bar:el.querySelector('[data-role=bar]'),
   nameEl:el.querySelector('[data-role=name]'), statEl:el.querySelector('[data-role=stat]'),
-  samples:null, dur:0, log:null, fileName:"", logName:"",
+  samples:null, fs:50000, wav:false, wavBuild:"", file:null, dur:0, log:null, fileName:"", logName:"",
   index:null, nCols:0, indexing:false, buildMs:0,
 }));
 
@@ -2053,7 +2065,9 @@ function buildIndex(p, done){
   const t0=performance.now();
   let c=0;
   const CHUNK=900;
+  const gen=p.indexGen=(p.indexGen||0)+1;   // a newer load of this pane retires this chain
   (function step(){
+    if(gen!==p.indexGen) return;
     const end=Math.min(p.nCols,c+CHUNK);
     for(;c<end;c++){
       spectrumDb(p.samples,c*CACHE_HOP,0,col);
@@ -2075,6 +2089,9 @@ function setProgress(p,f){
   i.style.width=Math.round(f*100)+"%";
   if(f<1) p.statEl.textContent="indexing "+Math.round(f*100)+"%";
 }
+
+// The band can reach the highest Nyquist among the loaded files.
+function nyq(){ return Math.max(0,...panes.map(p=>p.samples?p.fs/2:0)) || 25000; }
 
 function fmtT(s){
   if(s<0) return "-"+fmtT(-s);
@@ -2104,20 +2121,22 @@ function draw(p){
   p.over.hidden = !!p.samples && !p.indexing;
   if(!p.samples || p.indexing) return;
 
-  const fLo=Math.max(0,Math.min(st.fLo,st.fHi-1)), fHi=Math.min(NYQ,Math.max(st.fHi,fLo+1));
-  const k0=Math.max(0,Math.floor(fLo/DF)), k1=Math.min(CACHE_BINS,Math.ceil(fHi/DF));
-  const nb=Math.max(1,k1-k0);
+  // Bins past this file's Nyquist (a 25 kHz file beside a 50 kHz one) are drawn empty.
+  const DF=p.fs/NFFT;
+  const fLo=Math.max(0,Math.min(st.fLo,st.fHi-1)), fHi=Math.min(nyq(),Math.max(st.fHi,fLo+1));
+  const k0=Math.max(0,Math.floor(fLo/DF)), k1=Math.ceil(fHi/DF);
+  const nb=Math.max(1,k1-k0), nReal=Math.max(0,Math.min(nb,CACHE_BINS-k0));
 
-  const i0=st.t0*FS;
-  const hopFull=st.span*FS/plotW;
+  const i0=st.t0*p.fs;
+  const hopFull=st.span*p.fs/plotW;
   const useIndex = p.index && hopFull>=CACHE_HOP;
   // only the live path is expensive enough to need the coarse pass
   const nCol = (!useIndex && interacting) ? Math.max(64,Math.round(plotW/3)) : plotW;
-  const hopNeeded = st.span*FS/nCol;
+  const hopNeeded = st.span*p.fs/nCol;
 
   // gather one dB column per sample column
   const colDb=new Float32Array(nCol*nb);
-  const tmp=new Float32Array(nb);
+  const tmp=new Float32Array(nReal);
   let lo=1e9, hi=-1e9;
   for(let x=0;x<nCol;x++){
     const off=i0+x*hopNeeded;
@@ -2126,17 +2145,19 @@ function draw(p){
       const ci=Math.round(off/CACHE_HOP);
       if(ci>=0&&ci<p.nCols){
         const base=ci*CACHE_BINS;
-        for(let b=0;b<nb;b++){
+        for(let b=0;b<nReal;b++){
           const v=DB_LO+p.index[base+k0+b]*DB_SPAN/255;
           colDb[x*nb+b]=v; if(v<lo)lo=v; if(v>hi)hi=v;
         }
+        for(let b=nReal;b<nb;b++) colDb[x*nb+b]=NaN;
         ok=true;
       }
     } else {
       const s=Math.round(off);
       if(s>=0&&s+NWIN<p.samples.length){
-        spectrumDb(p.samples,s,k0,tmp);
-        for(let b=0;b<nb;b++){ const v=tmp[b]; colDb[x*nb+b]=v; if(v<lo)lo=v; if(v>hi)hi=v; }
+        if(nReal>0) spectrumDb(p.samples,s,k0,tmp);
+        for(let b=0;b<nReal;b++){ const v=tmp[b]; colDb[x*nb+b]=v; if(v<lo)lo=v; if(v>hi)hi=v; }
+        for(let b=nReal;b<nb;b++) colDb[x*nb+b]=NaN;
         ok=true;
       }
     }
@@ -2178,15 +2199,16 @@ function draw(p){
     ctx.strokeStyle="rgba(255,255,255,.07)";
     ctx.beginPath(); ctx.moveTo(axisW,y); ctx.lineTo(W,y); ctx.stroke();
   }
-  // where the chirp band sits, whenever the view is wider than it
-  if(fLo<8000 && fHi>9000){
+  // where the chirp bands sit (8.5 kHz and 4 kHz protocols), whenever the view is wider
+  for(const [a,b] of [[8000,9000],[3700,4300]]){
+    if(!(fLo<a && fHi>b)) continue;
     ctx.strokeStyle="rgba(78,205,196,.5)"; ctx.setLineDash([4*dpr,3*dpr]);
-    for(const f of [8000,9000]){
+    for(const f of [a,b]){
       const y=H*(1-(f-fLo)/sp);
       ctx.beginPath(); ctx.moveTo(axisW,y); ctx.lineTo(W,y); ctx.stroke();
     }
     ctx.setLineDash([]); ctx.textAlign="left"; ctx.fillStyle="rgba(78,205,196,.8)";
-    ctx.fillText("chirp", axisW+6*dpr, H*(1-(9000-fLo)/sp)-8*dpr);
+    ctx.fillText("chirp", axisW+6*dpr, H*(1-(b-fLo)/sp)-8*dpr);
   }
 
   if(st.events && p.log){
@@ -2222,30 +2244,72 @@ function drawAll(){ if(raf) return; raf=requestAnimationFrame(()=>{ raf=0; panes
 function setStat(p){
   if(p.indexing) return;
   const bits=[];
-  if(p.samples) bits.push(p.dur.toFixed(1)+"s");
+  if(p.samples) bits.push(p.dur.toFixed(1)+"s", (p.fs/1000)+" kHz"+(p.wav?"":" (.bin rate)"));
+  if(p.wavBuild) bits.push(p.wavBuild);
   if(p.buildMs) bits.push("indexed "+(p.buildMs/1000).toFixed(1)+"s");
   if(p.log){
     const n=p.log.events.filter(e=>e.kind==="ok").length;
     const f=p.log.events.filter(e=>e.kind==="bad").length;
     bits.push(n+" decoded", f+" failed");
     if(p.log.build) bits.push(p.log.build);
-    if(p.log.rate && Math.abs(+p.log.rate-FS)>1) bits.push("rate "+p.log.rate+"!");
+    if(p.log.rate && Math.abs(+p.log.rate-p.fs)>1) bits.push("rate "+p.log.rate+"!");
   }
   p.statEl.textContent=bits.join("  ·  ");
 }
+// RIFF/WAVE, 16-bit PCM -> {fs, samples (channel 0), build (LIST/INFO/ISFT)}; null for anything
+// else, i.e. a raw .bin. The data chunk is clipped to the file: after a power cut the SD
+// recorder's header holds the size as of its last sync.
+function parseWav(buf){
+  const v=new DataView(buf);
+  const tag=o=>String.fromCharCode(v.getUint8(o),v.getUint8(o+1),v.getUint8(o+2),v.getUint8(o+3));
+  if(buf.byteLength<44 || tag(0)!=="RIFF" || tag(8)!=="WAVE") return null;
+  let fs=0, ch=1, build="";
+  for(let o=12;o+8<=buf.byteLength;){
+    const id=tag(o), size=v.getUint32(o+4,true), body=o+8;
+    if(id==="fmt "){
+      if(v.getUint16(body,true)!==1) throw new Error("WAV is not PCM");
+      ch=v.getUint16(body+2,true); fs=v.getUint32(body+4,true);
+      const bits=v.getUint16(body+14,true);
+      if(bits!==16) throw new Error("WAV is "+bits+"-bit; only 16-bit is read");
+    } else if(id==="LIST" && body+4<=buf.byteLength && tag(body)==="INFO"){
+      const end=Math.min(body+size,buf.byteLength);
+      for(let q=body+4;q+8<=end;){
+        const sid=tag(q), sl=v.getUint32(q+4,true);
+        if(sid==="ISFT") build=new TextDecoder().decode(new Uint8Array(buf,q+8,Math.max(0,Math.min(sl,end-q-8)))).split("\0")[0];
+        q+=8+sl+(sl&1);
+      }
+    } else if(id==="data"){
+      if(!fs) throw new Error("WAV data before fmt");
+      const n=Math.floor(Math.min(size,buf.byteLength-body)/(2*ch));
+      // A view, not a copy, when aligned (the SD recorder's data starts at 512): a 1 GiB file
+      // would otherwise need twice its size in memory.
+      const all=body%2===0 ? new Int16Array(buf,body,n*ch) : new Int16Array(buf.slice(body,body+n*2*ch));
+      if(ch===1) return {fs,samples:all,build};
+      const mono=new Int16Array(n); for(let i=0;i<n;i++) mono[i]=all[i*ch];
+      return {fs,samples:mono,build};
+    }
+    o=body+size+(size&1);
+  }
+  throw new Error("WAV has no data chunk");
+}
 async function loadBin(p,file){
   const buf=await file.arrayBuffer();
-  p.samples=new Int16Array(buf); p.dur=p.samples.length/FS; p.fileName=file.name;
+  let w=null;
+  try{ w=parseWav(buf); }catch(e){ p.statEl.textContent=file.name+": "+e.message; return; }
+  p.wav=!!w; p.wavBuild=w?w.build:""; p.file=file;
+  p.fs=w?w.fs:+$("binRate").value;
+  p.samples=w?w.samples:new Int16Array(buf,0,buf.byteLength>>1);
+  p.dur=p.samples.length/p.fs; p.fileName=file.name;
   p.index=null; p.buildMs=0;
   p.nameEl.textContent=file.name+(p.logName?"  +  "+p.logName:"");
-  if(st.span>p.dur) st.span=Math.min(20,p.dur);
+  if(p.dur>0 && st.span>p.dur) st.span=Math.min(20,p.dur);   // a header-only WAV leaves the view
   syncInputs(); drawAll();
   applyDeviceLog();
   buildIndex(p,drawAll);
 }
 async function loadLog(p,file){
   p.log=parseLog(await file.text()); p.logName=file.name;
-  p.nameEl.textContent=(p.fileName||"(no .bin)")+"  +  "+file.name;
+  p.nameEl.textContent=(p.fileName||"(no audio)")+"  +  "+file.name;
   setStat(p); drawAll();
 }
 
@@ -2284,18 +2348,18 @@ async function assign(fileList){
   const groups=new Map();
   const odd=[];
   for(const f of fileList){
-    const m=f.name.match(/^(.*?)[_-]?(COM\d+)\.(bin|log|txt)$/i);
+    const m=f.name.match(/^(.*?)[_-]?(COM\d+)\.(bin|wav|log|txt)$/i);
     if(!m){ odd.push(f.name); continue; }
-    const port=m[2].toUpperCase(), kind=m[3].toLowerCase()==="bin"?"bin":"log";
+    const port=m[2].toUpperCase(), kind=/^(bin|wav)$/i.test(m[3])?"bin":"log";
     if(!groups.has(port)) groups.set(port,{port,bin:null,log:null});
     groups.get(port)[kind]=f;
   }
   // a selection with no port in the names still works: fall back to extension order
   if(!groups.size){
-    const bins=[...fileList].filter(f=>/\.bin$/i.test(f.name));
+    const bins=[...fileList].filter(f=>/\.(bin|wav)$/i.test(f.name));
     const logs=[...fileList].filter(f=>/\.(log|txt)$/i.test(f.name));
     bins.forEach((b,i)=>groups.set("file"+i,{port:b.name,bin:b,log:logs[i]||null}));
-    odd.length=0;   // SD NNNNN.BIN files land here by design: not "unrecognised"
+    odd.length=0;   // SD NNNNN.WAV / .BIN files land here by design: not "unrecognised"
   }
   const keys=[...groups.keys()].sort((a,b)=>{
     const na=+(a.match(/\d+/)||[1e9])[0], nb=+(b.match(/\d+/)||[1e9])[0];
@@ -2307,7 +2371,7 @@ async function assign(fileList){
     if(!g.log){ p.log=null; p.logName=""; }   // an SD file: the device log (if any) fills this in
     if(g.log) loadLog(p,g.log);
     if(g.bin) loadBin(p,g.bin);
-    info.push(("AB"[i])+" = "+g.port+(g.bin?"":" (no .bin)"));
+    info.push(("AB"[i])+" = "+g.port+(g.bin?"":" (no audio)"));
   });
   if(keys.length>panes.length) info.push("ignored "+keys.slice(panes.length).join(", "));
   if(odd.length) info.push("unrecognised: "+odd.length);
@@ -2333,7 +2397,7 @@ panes.forEach(p=>{
       let h=Math.max(50,(st.fHi-st.fLo)*s);
       st.fLo=at-fy*h; st.fHi=st.fLo+h;
       if(st.fLo<0){ st.fHi-=st.fLo; st.fLo=0; }
-      if(st.fHi>NYQ){ st.fLo-=st.fHi-NYQ; st.fHi=NYQ; if(st.fLo<0) st.fLo=0; }
+      const N=nyq(); if(st.fHi>N){ st.fLo-=st.fHi-N; st.fHi=N; if(st.fLo<0) st.fLo=0; }
     }
     touchInteract(); clearPreset(); syncInputs(); drawAll();
   },{passive:false});
@@ -2352,7 +2416,7 @@ panes.forEach(p=>{
       st.t0=drag.t0-((e.clientX-drag.x)/plot)*st.span;
       const h=drag.fHi-drag.fLo, dy=((e.clientY-drag.y)/r.height)*h;
       let lo=drag.fLo+dy, hi=lo+h;
-      if(lo<0){ hi-=lo; lo=0; } if(hi>NYQ){ lo-=hi-NYQ; hi=NYQ; if(lo<0) lo=0; }
+      const N=nyq(); if(lo<0){ hi-=lo; lo=0; } if(hi>N){ lo-=hi-N; hi=N; if(lo<0) lo=0; }
       st.fLo=lo; st.fHi=hi;
       touchInteract(); clearPreset(); syncInputs(); drawAll(); return;
     }
@@ -2370,7 +2434,7 @@ function syncInputs(){
   $("tstart").value=st.t0.toFixed(2); $("hist").value=st.span.toFixed(2);
   $("fLo").value=Math.round(st.fLo); $("fHi").value=Math.round(st.fHi);
 }
-function clearPreset(){ $("bProto").ariaPressed="false"; $("bFull").ariaPressed="false"; }
+function clearPreset(){ for(const b of ["bProto","bP4k","bFull"]) $(b).ariaPressed="false"; }
 function setBand(lo,hi,which){
   st.fLo=lo; st.fHi=hi; clearPreset();
   if(which) $(which).ariaPressed="true";
@@ -2378,8 +2442,11 @@ function setBand(lo,hi,which){
 }
 $("bProto").onclick=()=>setBand(PRESETS.proto[0],PRESETS.proto[1],"bProto");
 $("bFull").onclick =()=>setBand(PRESETS.full[0],PRESETS.full[1],"bFull");
+$("bP4k").onclick  =()=>setBand(PRESETS.p4k[0],PRESETS.p4k[1],"bP4k");
+// A raw .bin has no rate of its own: re-read the loaded ones at the new rate.
+$("binRate").onchange=()=>{ for(const p of panes) if(p.samples && !p.wav && p.file) loadBin(p,p.file); };
 $("fLo").oninput=e=>{ const v=+e.target.value; if(isFinite(v)&&v<st.fHi){ st.fLo=Math.max(0,v); clearPreset(); drawAll(); } };
-$("fHi").oninput=e=>{ const v=+e.target.value; if(isFinite(v)&&v>st.fLo){ st.fHi=Math.min(NYQ,v); clearPreset(); drawAll(); } };
+$("fHi").oninput=e=>{ const v=+e.target.value; if(isFinite(v)&&v>st.fLo){ st.fHi=Math.min(nyq(),v); clearPreset(); drawAll(); } };
 $("hist").oninput=e=>{ const v=+e.target.value; if(v>0){ st.span=v; drawAll(); } };
 $("tstart").oninput=e=>{ const v=+e.target.value; if(isFinite(v)){ st.t0=v; drawAll(); } };
 $("reset").onclick=()=>{ st.t0=0; st.span=20; setBand(PRESETS.proto[0],PRESETS.proto[1],"bProto"); };

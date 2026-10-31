@@ -2,7 +2,7 @@
 """Assemble itd/index.html: one page, four tabs.
 
   Console    the ARS console (src/console/), Web Serial + Web Bluetooth
-  Audio      the capture viewer (src/viewer.*), SD .BIN and field-tool captures
+  Audio      the capture viewer (src/viewer.*), SD .WAV / .BIN and field-tool captures
   Motor log  the UI-mode motor log viewer (src/uilog.*)
   Buzzer sorter  the transducer polarity (type A / B) bench readout for the v3_buzzer_polarity
              firmware (src/sorter.*), its own Web Serial port

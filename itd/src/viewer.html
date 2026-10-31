@@ -1,18 +1,27 @@
 <header>
   <!-- One row of inline-labelled groups; wraps only on narrow screens. -->
   <div class="grp">
-    <label class="pick" id="pickLbl" title="SD card NNNNN.BIN (+ an event log CSV), or field-tool .bin/.log pairs">Load files
-      <input type="file" id="pick" accept=".bin,.log,.txt,.csv" multiple></label>
+    <label class="pick" id="pickLbl" title="SD card NNNNN.WAV or older NNNNN.BIN (+ an event log CSV), or field-tool .bin/.log pairs">Load files
+      <input type="file" id="pick" accept=".wav,.bin,.log,.txt,.csv" multiple></label>
     <button id="useConsoleLog" disabled title="Overlay the event log dumped in the Console tab">Console event log</button>
   </div>
 
   <div class="grp">
     <span class="lbl">Band</span>
-    <button id="bProto" aria-pressed="true">7.5&ndash;9.5k</button>
+    <button id="bProto" aria-pressed="true" title="the 8.5 kHz protocol">7.5&ndash;9.5k</button>
+    <button id="bP4k" aria-pressed="false" title="the 4 kHz protocol">3.5&ndash;4.5k</button>
     <button id="bFull" aria-pressed="false">0&ndash;20k</button>
     <input type="number" id="fLo" value="7500" min="0" max="25000" step="100" aria-label="Band low Hz">
     <input type="number" id="fHi" value="9500" min="0" max="25000" step="100" aria-label="Band high Hz">
     <span class="hint">Hz</span>
+  </div>
+
+  <div class="grp">
+    <label class="lbl" for="binRate" title="A raw .bin carries no sample rate (a .wav does)">.bin rate</label>
+    <select id="binRate" aria-label="Sample rate for raw .bin files">
+      <option value="50000">50 kHz (8.5k builds)</option>
+      <option value="25000">25 kHz (4k builds)</option>
+    </select>
   </div>
 
   <div class="grp">
@@ -47,7 +56,7 @@
     <div class="cwrap"><canvas></canvas><div class="over" data-role="over">
       {{LOGO_FULL}}
       <b>Load captures to begin</b>
-      <span>SD card <code>NNNNN.BIN</code> (+ event log CSV) &middot; field-tool <code>.bin</code> + <code>.log</code></span>
+      <span>SD card <code>NNNNN.WAV</code> or <code>.BIN</code> (+ event log CSV) &middot; field-tool <code>.bin</code> + <code>.log</code></span>
       <span>Wheel zooms &middot; shift = time only &middot; ctrl = frequency only &middot; drag pans</span>
       <div class="bar" data-role="bar" hidden><i></i></div>
     </div></div>
