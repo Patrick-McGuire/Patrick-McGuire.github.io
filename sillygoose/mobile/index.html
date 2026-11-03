@@ -809,6 +809,14 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 }
 .config-table-actions { display: flex; gap: 5px; white-space: nowrap; }
 .config-table-actions .btn { width: 50px; height: 32px; padding: 2px; font-size: var(--fs-xs); }
+/* System Configuration rows as two lines - the setting's name, then its value with Get/Set beside
+   it - since name + value + buttons on one line ran ~490px wide, leaving Get/Set off-screen behind
+   a sideways scroll. Scoped to #config-fields: the flight config viewer reuses .config-table. */
+#config-fields .config-table thead { display: none; }
+#config-fields .config-table tr { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+#config-fields .config-table td { border-bottom: none; }
+#config-fields .config-table-label { grid-column: 1 / -1; white-space: normal; padding-bottom: 2px; }
+#config-fields .config-table-input input { width: 100%; }
 
 .btn {
     background-color: var(--accent); color: var(--bg-color); border: none;
@@ -842,13 +850,11 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .streaming-badge.streaming-on { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
 .streaming-badge.streaming-off { background: #334155; color: #94a3b8; }
 
-.cmd-row-btn { width: 90px; flex-shrink: 0; }
-/* #cmd-input has inline flex-grow:1 (see body.html) but no min-width, so its
-   browser-default text-input intrinsic min-width (~170-190px in Chrome)
-   wins over the ~70px actually left after 3 .cmd-row-btn siblings - same
-   flex min-width:auto gotcha as .tabs/#config-fields above, just without an
-   overflow-x:auto anywhere in this row to (partially) mask it. */
-#cmd-input { min-width: 0; }
+/* Command box on its own full-width line, its three buttons sharing the line below - beside them
+   it only got the ~55px left over on a phone. */
+.cmd-row { flex-wrap: wrap; }
+#cmd-input { flex-basis: 100%; min-width: 0; }
+.cmd-row-btn { flex: 1 1 0; width: auto; }
 
 #series-modal, #config-modal, #profile-modal {
     display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
@@ -876,6 +882,11 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
 .live-map-container { height: 55vh; min-height: 280px; border-radius: 12px; border: 1px solid var(--border); background: var(--card-bg); position: relative; }
 #live-map { width: 100%; height: 100%; border-radius: 12px; }
 .leaflet-container { border-radius: 12px; background: #0b1220; font-family: 'Inter', sans-serif; }
+/* Same inlined layers icon as app.css - Leaflet's images/layers.png isn't in the build. */
+.leaflet-control-layers-toggle, .leaflet-retina .leaflet-control-layers-toggle {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Cg fill='none' stroke='%23334155' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M13 4 23 9 13 14 3 9z' fill='%2394a3b8'/%3E%3Cpath d='M3 13l10 5 10-5'/%3E%3Cpath d='M3 17l10 5 10-5'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 26px 26px;
+}
 
 .qr-overlay {
     position: absolute; right: 8px; bottom: 8px; z-index: 450;
@@ -1374,7 +1385,7 @@ header { display: flex; flex-wrap: wrap; justify-content: space-between; align-i
     </div>
 
     <div id="terminal"></div>
-    <div style="display:flex; gap:10px">
+    <div class="cmd-row" style="display:flex; gap:10px">
         <input type="text" id="cmd-input" placeholder="Manually enter command..." style="flex-grow:1; background:#111827; border:1px solid var(--border); color:white; padding:10px; border-radius:6px">
         <button id="sendBtn" class="btn cmd-row-btn" disabled>Send</button>
         <button id="exportLogBtn" class="btn btn-secondary cmd-row-btn" title="Export a debug log file to attach when reporting an issue">Export Log</button>
@@ -3873,6 +3884,7 @@ const CONFIG_FIELD_DEFS = [
     { name: "RADIO_TRANSMIT_INTERVAL", type: "u32", size: 4, align: 4, radioOnly: true },
     { name: "BUZZER_ENABLED", type: "u32", size: 4, align: 4 },
     { name: "GROUND_STATION_MODE", type: "u32", size: 4, align: 4, radioOnly: true },
+    { name: "FIRST_STAGE_BURNOUT", type: "u32", size: 4, align: 4 },
 ];
 
 // Computes each field's byte offset the same way firmware's Configuration::assignMemory() does
@@ -4272,6 +4284,8 @@ class Connection {
 
         this.recording = false;
         this.streaming = false;
+        // Set after a stalled offload so its late rows aren't adopted as a stream (processLine())
+        this.adoptStreamBlocked = false;
         this.simActive = false; // true while the Simulation tab holds the writable stream locked
         this.currentFlightLines = [];
         this.currentFlightBin = [];
@@ -4506,7 +4520,11 @@ class Connection {
     forceUIDisconnect() {
         this.port = null; this.reader = null; this.bleWriter = null; this.bleDevice = null; this.transport = null;
         this.stopOffloadWatchdog();
+        const wasStreaming = this.streaming;
         setBusy(false); this.recording = false; this.streaming = false;
+        // Without this the Live Graph badge keeps saying "Streaming" and the desktop stream-log
+        // file stays open after the board goes away mid-stream.
+        if (wasStreaming) Telemetry.set('streaming', false);
         setConnectedUI(false);
         // 'offloadProgress' is only otherwise cleared by a clean "Ending Offload"
         // line (see processLine below) - a disconnect mid-offload (failed/hung
@@ -4515,7 +4533,7 @@ class Connection {
         Telemetry.set('offloadProgress', null);
     }
 
-    // Ends an offload: saves the flight in progress and selects the last one (plotting is skipped
+    // Ends an offload: saves the flight in progress and selects the newest listed one (plotting is skipped
     // while the offload runs, see saveFlight()). `stalled` = the board stopped sending mid-offload.
     finishOffload(stalled) {
         this.stopOffloadWatchdog();
@@ -4525,11 +4543,14 @@ class Connection {
         setBusy(false);
         if (stalled) {
             this.binaryParseAbandoned = true;
+            // A stalled text offload can resume after the watchdog gave up - its rows must not
+            // be taken for a live stream (see processLine()). Cleared on the next connect/stream.
+            this.adoptStreamBlocked = true;
             logTerm(`Offload stopped early: the board sent nothing for ${OFFLOAD_STALL_MS / 1000} s. ` +
                 'Flights received so far are kept - run the offload again for the rest.', "red");
             DebugLog.warn('offload', 'stalled - board stopped sending mid-offload');
         }
-        if (flightData.length) selectFlight(flightData.length - 1);
+        if (flightData.length) selectFlight(lastVisibleFlightIndex());
     }
 
     startOffloadWatchdog() {
@@ -4569,7 +4590,10 @@ class Connection {
         }
         DebugLog.tx('serial', wireMsg);
         logTerm(`>> ${msg}`, "#38bdf8");
-        if (!msg.includes("offload") && !msg.includes("erase") && !msg.includes("streamLog")) setTimeout(() => setBusy(false), 800);
+        // Those three stay busy until their own reply clears it (processLine()) - except relayed
+        // over radio, where they're high-bandwidth-only commands the flying board never answers.
+        const clearedByReply = !this.forwardToRadio && (msg.includes("offload") || msg.includes("erase") || msg.includes("streamLog"));
+        if (!clearedByReply) setTimeout(() => setBusy(false), 800);
     }
 
     // Handle one logical text line (from the text stream, or reconstructed from a
@@ -4605,16 +4629,28 @@ class Connection {
         if (line.startsWith("GPS\t")) { this.isGroundStation = true; this.handleGroundGps(line); return; }
 
         const isDataRow = /^\d/.test(line);
+        // A board keeps streaming across a reconnect (its "Streaming enabled" went to the old
+        // session), so rows matching its log format with nothing else running mean it's streaming.
+        if (isDataRow && !this.recording && !this.streaming && !this.simActive && !this.isGroundStation && !this.adoptStreamBlocked
+            && this.header.length && line.split("\t").length === this.header.length) {
+            this.beginStreaming();
+        }
         if (!((this.recording || this.streaming) && isDataRow)) logTerm(line);
 
         if (line.includes("Entries in log:")) Telemetry.set('logEntries', line.split(':').pop().trim());
         if (line.includes("Remaining log length:")) Telemetry.set('logRemaining', formatLogTime(line.split(':').pop().trim()));
         if (line.includes("Logging")) Telemetry.set('logStatus', line.includes("enabled") ? "ON" : "OFF");
 
-        if (line.includes("Streaming enabled")) { this.streaming = true; this.liveDataBuffer = []; this.streamLogLines = []; this.currentStreamMessages = []; Telemetry.set('streaming', true); }
+        // --streamLog is excluded from sendCmd()'s busy timeout, so its replies clear it: -b/-e
+        // answer "Streaming enabled"/"disabled", a bare --streamLog "Streaming is enabled"/"disabled"
+        if (line.includes("Streaming enabled")) { clearLiveTrack(); this.beginStreaming(); }
         if (line.includes("Streaming disabled")) { this.streaming = false; Telemetry.set('streaming', false); }
+        if (/Streaming (is )?(enabled|disabled)/.test(line)) setBusy(false);
 
-        const setMatch = line.match(/MSG:\s+([A-Z_]+)\s+is set to:\s+(.+)/);
+        // Get replies "is set to", Set replies "has been set to", or "rejected, still set to" /
+        // "is read-only, still set to" - all carry the board's actual value, so a refused Set
+        // doesn't leave the typed one showing.
+        const setMatch = line.match(/MSG:\s+([A-Z_]+)\s+(?:is set to|has been set to|rejected, still set to|is read-only, still set to):\s+(.+)/);
         if (setMatch) {
             Telemetry.set(`cfg.${setMatch[1]}`, setMatch[2].trim());
             setBusy(false);
@@ -4662,6 +4698,14 @@ class Connection {
         if (line.includes("Erase Complete")) setBusy(false);
     }
 
+    // Starts a fresh streaming session: empty buffers, then the 'streaming' telemetry key, which
+    // starts the stream-log file (see 05-live-stream.js).
+    beginStreaming() {
+        this.adoptStreamBlocked = false;
+        this.streaming = true; this.liveDataBuffer = []; this.streamLogLines = []; this.currentStreamMessages = [];
+        Telemetry.set('streaming', true);
+    }
+
     // Decodes one "RADIO_RX\t<rssi>\t<snr>\t<hexPayload>" line (GroundStationRelay::tick()) into the
     // same tab-row text a direct connection's --streamLog produces, then feeds it through the
     // normal live-telemetry path (handleLiveLine) - Live Stream, Live Map, and the pyro badges
@@ -4700,10 +4744,7 @@ class Connection {
         }
 
         Telemetry.set('radioLink', { rssi, snr });
-        if (!this.streaming) {
-            this.streaming = true; this.liveDataBuffer = []; this.streamLogLines = []; this.currentStreamMessages = [];
-            Telemetry.set('streaming', true);
-        }
+        if (!this.streaming) this.beginStreaming();
         try {
             handleLiveLine(this, decodeLogRecord(this.logFormat, payload, 0).join('\t'), { rssi, snr });
         } catch (e) {
@@ -4887,6 +4928,7 @@ class Connection {
                 // stays stuck forever with no way to recover except reloading
                 // the app - this makes the failure visible and recoverable.
                 DebugLog.error('connection', 'read loop error: ' + e.message);
+                logTerm("Board disconnected.", "red");
                 this.forceUIDisconnect();
                 break;
             } finally { if (this.reader && this.transport !== 'bluetooth') { this.reader.releaseLock(); this.reader = null; } }
@@ -4917,6 +4959,11 @@ function setConnectedUI(connected) {
 function setConnectButtonsDisabled(disabled) {
     document.getElementById('connectBtn').disabled = disabled;
     document.getElementById('connectBluetoothBtn').disabled = disabled;
+}
+
+// True while a board is connected over either transport - a Bluetooth link has no port.
+function isConnected(conn) {
+    return !!(conn.port || conn.bleWriter);
 }
 
 // Column lookups (LIVE_FIELDS indices + pyro channels) for a saved flight's own header.
@@ -5024,6 +5071,7 @@ async function detectAltimeterOnConnect(conn) {
     // flips true reactively in processLine() once a "RADIO_RX"/"GPS" line is actually seen.
     conn.isGroundStation = false;
     conn.forwardToRadio = false;
+    conn.adoptStreamBlocked = false;
 
     // Desktop reads the USB iProduct string (fwDetectVariant, precise down to variant number);
     // a plain browser only gets numeric vendor/product ids (fwDetectFamilyFromUsbIds) - still
@@ -5067,9 +5115,8 @@ Telemetry.subscribe('offloadProgress', n => {
 // only), messages (conserved logMessage() text - see buildFlightText()), namePrefix.
 function saveFlight(conn, lines, opts = {}) {
     const { bootConfig = "", launchConfig = "", binChunks = null, messages = [], namePrefix = "Flight" } = opts;
-    const flightNum = flightData.length + 1;
     const flight = {
-        id: Date.now(), name: `${namePrefix}_${flightNum}`, raw: [...lines],
+        id: Date.now(), name: nextFlightName(namePrefix), raw: [...lines],
         bootConfig, launchConfig, profileId: conn.profile.id, connectionId: conn.id,
         messages: [...messages],
         // The flight keeps its own column names (and definition, when the board sent one), so
@@ -5083,9 +5130,17 @@ function saveFlight(conn, lines, opts = {}) {
     DebugLog.info('offload', `saved ${flight.name} (${lines.length} rows, profile ${flight.profileId})`);
     // Mid-offload, only list it: plotting every flight as it arrives blocks the read loop long
     // enough for the board's USB writes to stall, and the firmware abandons the offload then.
-    // The last flight is selected once the offload finishes (see Connection.finishOffload()).
+    // The newest listed flight is selected once the offload finishes (see Connection.finishOffload()).
     if (conn.recording) refreshList();
     else selectFlight(flightData.length - 1);
+}
+
+// "<prefix>_<n>", one past the highest n already listed under that prefix - numbering by list
+// length repeated a name after a delete, and Download All's zip kept only one of the two.
+function nextFlightName(prefix) {
+    const nameRe = new RegExp(`^${prefix}_(\\d+)$`);
+    const used = flightData.map(f => f.name.match(nameRe)).filter(Boolean).map(m => parseInt(m[1], 10));
+    return `${prefix}_${used.length ? Math.max(...used) + 1 : 1}`;
 }
 
 // Column names for rows that arrived with no description at all (no LOG_FORMAT, no names line).
@@ -5103,12 +5158,26 @@ function flightHasAscentDescent(f) {
     return f._hasAD;
 }
 
+function launchFilterOn() {
+    return !!document.getElementById('filter-flightstate')?.checked;
+}
+
+// The flight to select after an offload: the newest one the launch filter leaves in the list, else
+// the newest overall (refreshList() keeps a selected flight listed regardless of the filter).
+function lastVisibleFlightIndex() {
+    if (launchFilterOn()) {
+        for (let i = flightData.length - 1; i >= 0; i--) if (flightHasAscentDescent(flightData[i])) return i;
+    }
+    return flightData.length - 1;
+}
+
 function refreshList() {
     const list = document.getElementById('flight-list');
-    const filterAD = document.getElementById('filter-flightstate')?.checked;
+    const filterAD = launchFilterOn();
     list.innerHTML = '';
     flightData.forEach((f, i) => {
-        if (filterAD && !flightHasAscentDescent(f)) return;
+        // The selected flight always stays listed, so what's plotted is never missing from the list
+        if (filterAD && i !== selectedIdx && !flightHasAscentDescent(f)) return;
         const item = document.createElement('div');
         item.className = `flight-item ${i === selectedIdx ? 'active' : ''}`;
         item.innerHTML = `<span>${f.name}</span><button class="del-btn" title="Delete" onclick="event.stopPropagation(); deleteLog(${i})">×</button>`;
@@ -5116,6 +5185,14 @@ function refreshList() {
         item.oncontextmenu = (e) => { e.preventDefault(); showFlightContextMenu(e, i); };
         list.appendChild(item);
     });
+    // Scrolls the list only - scrollIntoView() would also scroll the page, yanking a user reading
+    // the terminal back up on every flight an offload saves
+    const active = list.querySelector('.flight-item.active');
+    if (active) {
+        const listBox = list.getBoundingClientRect(), itemBox = active.getBoundingClientRect();
+        if (itemBox.top < listBox.top) list.scrollTop -= listBox.top - itemBox.top;
+        else if (itemBox.bottom > listBox.bottom) list.scrollTop += itemBox.bottom - listBox.bottom;
+    }
     document.getElementById('downloadZipBtn').disabled = (flightData.length === 0);
     document.getElementById('clearAllBtn').disabled = (flightData.length === 0);
 }
@@ -5270,10 +5347,32 @@ function zoomToFlightEnabled() {
         try { localStorage.setItem(ZOOM_TO_FLIGHT_KEY, toggle.checked ? '1' : '0'); } catch (e) { /* storage unavailable */ }
         const gd = document.getElementById('plot-container');
         if (!gd || !gd._fullLayout) return;
-        if (toggle.checked && gd._flightWindow) Plotly.relayout(gd, { 'xaxis.range': gd._flightWindow, 'xaxis.autorange': false });
-        else Plotly.relayout(gd, { 'xaxis.autorange': true });
+        const zoomed = toggle.checked && gd._flightWindow;
+        // Labels that fit apart in one view can overlap in the other - re-space them for the new span
+        const annotations = (gd.layout.annotations || []).map(a => ({ ...a }));
+        staggerEventLabels(annotations, zoomed ? gd._flightWindow : gd._fullSpan);
+        if (zoomed) Plotly.relayout(gd, { 'xaxis.range': gd._flightWindow, 'xaxis.autorange': false, annotations });
+        else Plotly.relayout(gd, { 'xaxis.autorange': true, annotations });
     });
 })();
+
+// Event labels closer together than this share of the shown time span print over each other
+// (e.g. ASCENT → DESCENT and DROGUE FIRED, 10ms apart at apogee).
+const EVENT_LABEL_MIN_GAP = 0.015;
+
+// Within each run of too-close labels (annotations are in time order), alternates them to either
+// side of their line, and moves each further pair down the graph - cycling through three heights
+// so a long run never pushes a label below the plot.
+function staggerEventLabels(annotations, span) {
+    const minGap = (span[1] - span[0]) * EVENT_LABEL_MIN_GAP;
+    let runIdx = 0;
+    annotations.forEach((a, i) => {
+        runIdx = (i > 0 && a.x - annotations[i - 1].x < minGap) ? runIdx + 1 : 0;
+        a.xanchor = runIdx % 2 ? 'left' : 'right';
+        a.y = 1 - (Math.floor(runIdx / 2) % 3) * 0.35;
+        a.yanchor = 'top';
+    });
+}
 
 function plotFlight(flight) {
     const { cols, pyros } = layoutForFlight(flight);
@@ -5311,6 +5410,8 @@ function plotFlight(flight) {
 
     const gd = document.getElementById('plot-container');
     gd._flightWindow = flightTimeWindow(t, states);
+    gd._fullSpan = [t[0], t[t.length - 1]];
+    staggerEventLabels(annotations, zoomToFlightEnabled() && gd._flightWindow ? gd._flightWindow : gd._fullSpan);
     const zoomRange = zoomToFlightEnabled() && gd._flightWindow ? { range: gd._flightWindow, autorange: false } : {};
     Plotly.newPlot(gd, traces, {
         paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
@@ -5482,43 +5583,63 @@ document.getElementById('file-upload').addEventListener('change', function (e) {
             if (namesLine) loadedHeader = namesLine.split("\t");
         }
 
-        // Keep only data rows. Drops any non-data preamble (column header in either
-        // firmware or website format, "Logger setup" boot marker, stray MSG lines, etc.)
-        // so older raw serial captures load without modification.
-        const lines = allLines.filter(line => /^\d/.test(line));
+        // One flight per boot: a raw serial capture of a whole offload has a "Logger setup" line
+        // before each boot's CONFIG snapshots and rows, the same boundary a live offload splits on
+        // (see Connection.processLine()). This tool's own exports have none, so they stay one flight.
+        // Within each boot, keep only data rows - dropping any non-data preamble (column header in
+        // either firmware or website format, stray MSG: lines, etc.) so raw captures load unmodified.
+        const boots = [];
+        let boot = null;
+        const startBoot = () => { boot = { lines: [], bootConfig: "", launchConfig: "", messages: [] }; boots.push(boot); };
+        startBoot();
+        boot.bootConfig = loadedBootConfig;
+        boot.launchConfig = loadedLaunchConfig;
+        for (const line of allLines) {
+            if (line.includes("Logger setup")) { startBoot(); continue; }
+            if (isConfigLine(line)) {
+                if (!boot.bootConfig) boot.bootConfig = line; else if (!boot.launchConfig) boot.launchConfig = line;
+            } else if (/^\d/.test(line)) {
+                boot.lines.push(line);
+            } else if (line.startsWith("MSG\t")) {
+                // This tool's own exports tag conserved logMessage() text as "MSG\t<rowIndex>\t<text>"
+                // (see buildFlightText()) - recover those so re-loading a saved flight keeps them.
+                const parts = line.split('\t');
+                boot.messages.push({ afterRow: parseInt(parts[1], 10) || 0, text: parts.slice(2).join('\t') });
+            }
+        }
+        // Same minimum as a live offload (Connection.flushRecordedFlight()), so the stubs between real
+        // boots don't each become a flight - unless stubs are all there is, which still import.
+        const withRows = boots.filter(b => b.lines.length);
+        const kept = withRows.some(b => b.lines.length > 5) ? withRows.filter(b => b.lines.length > 5) : withRows;
 
-        // This tool's own exports tag conserved logMessage() text as "MSG\t<rowIndex>\t<text>"
-        // (see buildFlightText()) - recover those here so re-loading a saved flight doesn't
-        // silently drop them again.
-        const messages = allLines.filter(line => line.startsWith("MSG\t")).map(line => {
-            const parts = line.split('\t');
-            return { afterRow: parseInt(parts[1], 10) || 0, text: parts.slice(2).join('\t') };
-        });
-
-        if (lines.length === 0) {
+        if (kept.length === 0) {
             logTerm(`Skipped ${file.name}: no data rows found`, "red");
             document.getElementById('file-upload').value = '';
             return;
         }
 
-        // Create a new flight entry from the loaded data
-        const newFlight = {
-            id: Date.now(),
-            name: file.name.replace('.txt', ''),
-            raw: lines,
-            bootConfig: loadedBootConfig,
-            launchConfig: loadedLaunchConfig,
+        const baseName = file.name.replace('.txt', '');
+        kept.forEach((b, i) => flightData.push({
+            id: Date.now() + i,
+            name: kept.length > 1 ? `${baseName} (boot ${i + 1})` : baseName,
+            raw: b.lines,
+            bootConfig: b.bootConfig,
+            launchConfig: b.launchConfig,
             profileId: ConnectionManager.getActive().profile.id,
-            messages,
-            header: loadedHeader || placeholderHeader(lines),
+            messages: b.messages,
+            header: loadedHeader || placeholderHeader(b.lines),
             format: loadedFormat,
-        };
+        }));
+        // Newest of this file's boots that the launch filter shows (it keeps the selection listed anyway)
+        let pick = flightData.length - 1;
+        if (launchFilterOn()) {
+            for (let i = flightData.length - 1; i >= flightData.length - kept.length; i--) {
+                if (flightHasAscentDescent(flightData[i])) { pick = i; break; }
+            }
+        }
+        selectFlight(pick);
 
-        flightData.push(newFlight);
-        refreshList();
-        selectFlight(flightData.length - 1);
-
-        logTerm(`Loaded local file: ${file.name}`, "#22c55e");
+        logTerm(kept.length > 1 ? `Loaded local file: ${file.name} (${kept.length} boots)` : `Loaded local file: ${file.name}`, "#22c55e");
         // Reset input so you can load the same file again if needed
         document.getElementById('file-upload').value = '';
     };
@@ -5529,9 +5650,15 @@ document.getElementById('saveFileBtn').onclick = () => downloadFlight(flightData
 
 document.getElementById('downloadZipBtn').onclick = async () => {
     const zip = new JSZip();
+    // Imported files keep their file name, so two can share one - suffix repeats instead of
+    // letting the later one overwrite the earlier in the zip
+    const usedNames = new Set();
     flightData.forEach(f => {
-        zip.file(`${f.name}.txt`, buildFlightText(f));
-        if (f.bin) zip.file(`${f.name}.bin`, f.bin); // exact raw records for binary offloads
+        let name = f.name;
+        for (let n = 2; usedNames.has(name); n++) name = `${f.name} (${n})`;
+        usedNames.add(name);
+        zip.file(`${name}.txt`, buildFlightText(f));
+        if (f.bin) zip.file(`${name}.bin`, f.bin); // exact raw records for binary offloads
     });
     const content = await zip.generateAsync({ type: "blob" });
     const a = document.createElement('a'); a.href = URL.createObjectURL(content);
@@ -5715,7 +5842,10 @@ function plotLive() {
 }
 
 document.getElementById('history-slider').oninput = function () {
-    ConnectionManager.getActive().maxLivePoints = parseInt(this.value);
+    const conn = ConnectionManager.getActive();
+    conn.maxLivePoints = parseInt(this.value);
+    // handleLiveLine() only drops one old row per new one, so a lowered limit never took effect
+    if (conn.liveDataBuffer.length > conn.maxLivePoints) conn.liveDataBuffer.splice(0, conn.liveDataBuffer.length - conn.maxLivePoints);
     document.getElementById('hist-val').innerText = this.value;
 };
 
@@ -5832,7 +5962,10 @@ const OfflineTileLayer = (typeof L !== 'undefined') ? L.TileLayer.extend({
 }) : null;
 
 let liveMap = null, liveMapTileLayers = null, liveMapActiveTileKey = 'satellite', liveMapMarker = null, liveMapPath = null;
+// Every distinct GPS fix while streaming, recorded whether or not the Live Map tab is open (see
+// recordLiveTrack) - so switching tabs mid-flight doesn't leave a gap in the drawn path.
 const liveMapTrack = [];
+let liveMapCentered = false;
 // Ground station's own position (see Connection.handleGroundGps() in 03-connection.js) - a
 // second, distinct marker from the rocket's, since the two are different physical locations.
 // Created lazily on the first real fix (see updateLiveMapGroundPosition) rather than up front like
@@ -5847,6 +5980,12 @@ let liveMapGroundMarker = null;
 // it's checkable with nothing plugged in. Real position updates simply
 // overwrite this default once actual GPS data streams in.
 const DEFAULT_MAP_CENTER = [0, 0];
+
+// Touch screens have no right-click - Leaflet raises the same contextmenu event on a long-press.
+if (window.matchMedia && matchMedia('(pointer: coarse)').matches) {
+    const hint = document.querySelector('.map-hint-text');
+    if (hint) hint.textContent = 'Long-press: save offline';
+}
 
 function initLiveMap() {
     if (liveMap || typeof L === 'undefined') return;
@@ -5874,7 +6013,7 @@ function initLiveMap() {
     // Deliberately NOT the same color as the rocket marker itself (--accent, see .rocket-marker in
     // app.css) - the two need to read as distinct at a glance where the path passes near/under the
     // current marker position.
-    liveMapPath = L.polyline([], { color: '#facc15', weight: 2 }).addTo(liveMap);
+    liveMapPath = L.polyline(liveMapTrack, { color: '#facc15', weight: 2 }).addTo(liveMap);
     liveMapMarker = L.marker(DEFAULT_MAP_CENTER, {
         icon: L.divIcon({ className: 'rocket-marker', html: '&#9650;', iconSize: [20, 20], iconAnchor: [10, 10] })
     }).addTo(liveMap);
@@ -6143,11 +6282,40 @@ function hasRealFix(fixQuality) {
 function updateLiveMapPosition(lat, lon) {
     if (!liveMap) return;
     liveMapMarker.setLatLng([lat, lon]);
+    liveMapPath.setLatLngs(liveMapTrack);
+    if (!liveMapCentered) { liveMap.setView([lat, lon], 15); liveMapCentered = true; }
+    updateGpsQrCode(lat, lon);
+}
+
+// Draws whatever liveMapTrack gathered while the tab was hidden - called when the tab opens, so
+// the path is there even with no new row arriving (streaming stopped, or a slow ground link).
+function showLiveTrack() {
+    if (!liveMap || !liveMapTrack.length) return;
+    const [lat, lon] = liveMapTrack[liveMapTrack.length - 1];
+    updateLiveMapPosition(lat, lon);
+}
+
+// Starts a fresh path when the user starts a stream, so a bench session's track isn't joined onto
+// the flight's. Not on a reconnect that picks up a running stream - that's the same flight.
+function clearLiveTrack() {
+    liveMapTrack.length = 0;
+    liveMapCentered = false;
+    if (liveMapPath) liveMapPath.setLatLngs(liveMapTrack);
+}
+
+// Appends a row's GPS fix to liveMapTrack. Only when the position changed: rows arrive at up to
+// 100Hz but GPS updates far slower, and pushing every row filled the 5000-point cap in under a
+// minute, dropping the start of the flight's path.
+function recordLiveTrack(conn, row) {
+    const { cols } = layoutForHeader(conn.header);
+    if (cols.gpsLat === undefined || cols.gpsLon === undefined) return;
+    if (!hasRealFix(parseInt(row[cols.gpsFixQuality]))) return;
+    const lat = parseFloat(row[cols.gpsLat]), lon = parseFloat(row[cols.gpsLon]);
+    if (isNaN(lat) || isNaN(lon)) return;
+    const last = liveMapTrack[liveMapTrack.length - 1];
+    if (last && last[0] === lat && last[1] === lon) return;
     liveMapTrack.push([lat, lon]);
     if (liveMapTrack.length > 5000) liveMapTrack.shift();
-    liveMapPath.setLatLngs(liveMapTrack);
-    if (liveMapTrack.length === 1) liveMap.setView([lat, lon], 15);
-    updateGpsQrCode(lat, lon);
 }
 
 // Places/moves the ground station's marker - see liveMapGroundMarker's comment for why this
@@ -6303,9 +6471,10 @@ const throttledElevationSparkline = throttleByTime(updateElevationSparkline, LIV
 // Map rendering is comparatively expensive, so it only runs while the Live Map
 // tab is actually visible.
 function updateLiveMapIfActive(conn) {
+    if (conn.liveDataBuffer.length === 0) return;
+    recordLiveTrack(conn, conn.liveDataBuffer[conn.liveDataBuffer.length - 1]);
     const tabEl = document.getElementById('live-map-tab');
     if (!tabEl || !tabEl.classList.contains('active') || document.hidden) return;
-    if (conn.liveDataBuffer.length === 0) return;
     initLiveMap();
     // Leaflet sizes itself from the DOM at creation time; the tab may have been
     // hidden (display:none) then, so nudge it once the container has real size.
@@ -6334,7 +6503,7 @@ function rebuildPyroFireButtons(conn) {
     container.innerHTML = layoutForHeader(conn.header).pyros.filter(p => p.fireCmd).map(p =>
         `<button class="btn btn-warn ctrl-btn" data-cmd="${p.fireCmd}" data-confirm="Fire ${p.label} pyro?" disabled>Fire ${p.label}</button>`
     ).join('');
-    setSerialEnabled(!!conn.port); // newly-created buttons start disabled - sync them to the real state
+    setSerialEnabled(isConnected(conn)); // newly-created buttons start disabled - sync them to the real state
 }
 
 // Control Panel's log-health readout (see Connection.processLine, which
@@ -6389,7 +6558,7 @@ function rebuildConfigFields(conn) {
         }));
     });
 
-    setSerialEnabled(!!conn.port);
+    setSerialEnabled(isConnected(conn));
 }
 
 async function confirmErase() {
@@ -6711,9 +6880,11 @@ async function fwAdoptPort(conn, p) {
     // was flashed via double-tap while disconnected), fall through and try.
     if (fwAppPid && info.usbProductId && info.usbProductId !== fwAppPid) return false;
     try {
-        await p.open({ baudRate: 115200 });
+        // Same buffer as Connection.connect() - the 255-byte default can't absorb a binary offload
+        await p.open({ baudRate: 115200, bufferSize: SERIAL_RX_BUFFER_BYTES });
     } catch (e) { return false; }                          // not ready / wrong device — caller keeps trying
     conn.port = p;
+    conn.transport = 'usb';
     document.getElementById('connectBtn').style.display = 'none';
     document.getElementById('disconnectBtn').style.display = 'block';
     setSerialEnabled(true);
@@ -7008,6 +7179,23 @@ function dismissOnOutsideClick(menu) {
     }), 0);
 }
 
+// Esc or a click on the dimmed backdrop closes the series picker (applying it, its only way out)
+// and the config viewer. Not the altimeter picker - that one needs an answer. The press has to
+// start on the backdrop too, so a text selection dragged out of the box doesn't close it.
+const DISMISSABLE_MODALS = { 'series-modal': () => closeSeriesModal(), 'config-modal': () => closeConfigModal() };
+Object.entries(DISMISSABLE_MODALS).forEach(([id, close]) => {
+    const modal = document.getElementById(id);
+    let pressedBackdrop = false;
+    modal.addEventListener('mousedown', e => { pressedBackdrop = e.target === modal; });
+    modal.addEventListener('click', e => { if (pressedBackdrop && e.target === modal) close(); });
+});
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    Object.entries(DISMISSABLE_MODALS).forEach(([id, close]) => {
+        if (document.getElementById(id).style.display === 'flex') close();
+    });
+});
+
 let termBuffer = "";
 let cmdHistory = [];
 let historyIdx = -1;
@@ -7052,7 +7240,7 @@ setInterval(() => {
 
 function setBusy(val) {
     document.getElementById('busy-loader').style.display = val ? 'block' : 'none';
-    if (!val && ConnectionManager.getActive().port) setSerialEnabled(true);
+    if (!val && isConnected(ConnectionManager.getActive())) setSerialEnabled(true);
 }
 
 // Redraws are already skipped entirely while hidden (see the `!document.hidden`
@@ -7072,7 +7260,7 @@ function openTab(id) {
     if (event) event.currentTarget.classList.add('active');
     if (id === 'live-map-tab') {
         initLiveMap();
-        setTimeout(() => { if (liveMap) liveMap.invalidateSize(); }, 0);
+        setTimeout(() => { if (liveMap) { liveMap.invalidateSize(); showLiveTrack(); } }, 0);
     }
 }
 
@@ -7147,7 +7335,7 @@ if (exportLogBtn) exportLogBtn.onclick = () => {
     DebugLog.download({
         'Active profile': conn.profile.id,
         'Log format': conn.logFormat ? `${conn.logFormat.structName} (${conn.logFormat.fields.length} fields, ${conn.logFormat.size} bytes)` : (conn.header.length ? 'names line only' : 'none'),
-        'Connected': !!conn.port,
+        'Connected': isConnected(conn),
         'Streaming': conn.streaming,
         'Flights this session': flightData.length
     });
@@ -7189,6 +7377,9 @@ const SIM_PREFLIGHT_KEEP_S = 35.0;
 // it. Same values as the Python reference script - see SimulationParser.h's BUFFER_CAPACITY.
 const SIM_HIGH_WATER = 90;
 const SIM_BURST = 2;
+// A board that never sends --simSize isn't running a *Sim build - say so instead of sitting on
+// "Sending... 2 / N" with no explanation (the loop keeps waiting either way).
+const SIM_NO_REPLY_WARN_MS = 3000;
 
 const sgSimTextEncoder = new TextEncoder();
 
@@ -7321,8 +7512,17 @@ const Simulation = (() => {
             // HIGH_WATER that's a full burst every tick (buffer grows); at/above it we only
             // send once the firmware reports it drained some. BURST is bounded and the
             // firmware can't grow the buffer without our sends, so overflow can't happen.
+            const startedAt = Date.now();
+            let everReported = false;
             while (idx < samples.length && !stopRequested) {
-                if (!sizeReady) { await waitForSizeReport(1000); continue; }
+                if (!sizeReady) {
+                    await waitForSizeReport(1000);
+                    if (!sizeReady && !everReported && Date.now() - startedAt >= SIM_NO_REPLY_WARN_MS) {
+                        simStatus("No reply from the board - is it running a *Sim firmware build? Still waiting...", "#f59e0b");
+                    }
+                    continue;
+                }
+                everReported = true;
                 sizeReady = false;
                 const toSend = Math.max(0, Math.min(SIM_BURST, SIM_HIGH_WATER - latestFwSize, samples.length - idx));
                 if (toSend > 0) {
