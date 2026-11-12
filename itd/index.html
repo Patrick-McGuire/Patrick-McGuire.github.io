@@ -1257,11 +1257,36 @@ function requestInitialData() {
   }
 }
 
+// On Linux (BlueZ) gatt.connect() often resolves and then the link drops before
+// service discovery ("GATT Server is disconnected. Cannot retrieve services"),
+// especially on the first attempt or with stale cached GATT data. Windows
+// doesn't do this. So: connect, give BlueZ a moment, and if discovery fails
+// (or the link dropped) reconnect and try again a few times.
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+async function discoverBleWithRetry(device) {
+  const attempts = 4;
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      if (!device.gatt.connected) await device.gatt.connect();
+      await sleepMs(i === 1 ? 500 : 1000);
+      if (!device.gatt.connected) throw new Error('GATT Server is disconnected');
+      const service = await device.gatt.getPrimaryService(BLE_SERVICE_UUID);
+      const notifyChar = await service.getCharacteristic(BLE_NOTIFY_UUID);
+      const writeChar = await service.getCharacteristic(BLE_WRITE_UUID);
+      return { notifyChar, writeChar };
+    } catch (e) {
+      lastErr = e;
+      log('[bluetooth attempt ' + i + '/' + attempts + ' failed: ' + e.message + ']', 'err');
+      try { if (device.gatt.connected) device.gatt.disconnect(); } catch (_) {}
+      await sleepMs(500);
+    }
+  }
+  throw lastErr;
+}
+
 async function openBluetoothDevice(device) {
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(BLE_SERVICE_UUID);
-  const notifyChar = await service.getCharacteristic(BLE_NOTIFY_UUID);
-  const writeChar = await service.getCharacteristic(BLE_WRITE_UUID);
+  const { notifyChar, writeChar } = await discoverBleWithRetry(device);
 
   const bleReader = new BleReader();
   notifyChar.addEventListener('characteristicvaluechanged', (e) => {
