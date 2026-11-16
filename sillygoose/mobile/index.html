@@ -3860,13 +3860,19 @@ const RADIO_CONFIGS = [
     { id: "RADIO_FREQUENCY", label: "Radio Frequency (MHz)" },
     { id: "LORA_SPREADING_FACTOR", label: "LoRa Spreading Factor (5-12)" },
     { id: "RADIO_TRANSMIT_INTERVAL", label: "Radio TX Interval (milliseconds)" },
-    { id: "GROUND_STATION_MODE", label: "Ground Station Mode", type: "checkbox" }
+    { id: "GROUND_STATION_MODE", label: "Ground Station Mode", type: "checkbox" },
+    { id: "GPS_SOURCE", label: "GPS Source (0 onboard, 1 AUX port, applies on reboot)" }
+];
+// The Radio Board ground station's own settings (firmware builds/RadioBoardGroundStation.cpp).
+const RADIO_BOARD_CONFIGS = [
+    ...RADIO_CONFIGS.filter(c => c.id === "RADIO_FREQUENCY" || c.id === "LORA_SPREADING_FACTOR"),
+    ...SILLY_GOOSE_CONFIGS.filter(c => ["BOARD_NAME", "CONFIGURATION_VERSION", "FIRMWARE_VERSION"].includes(c.id))
 ];
 
 // Byte layout for a decoded LOG_CONFIG record's payload (see BasicLogger::logConfig() /
 // Configuration::getConfigDataBuffer()) - in firmware's declared/sorted-ID order
 // (ConfigurationRegistry.h), which is also assignMemory()'s field-placement order. SillyGoose
-// registers everything except the 3 radio fields; SeriousGoose registers all of them. This is a
+// registers everything except the SeriousGoose-only (radioOnly) fields; SeriousGoose registers all of them. This is a
 // DIFFERENT list from SILLY_GOOSE_CONFIGS/RADIO_CONFIGS above (those drive the editable-config
 // UI widget list and omit several fields - FLIGHT_STATE, BOARD_ORIENTATION, LAUNCH_ANGLE,
 // GYROSCOPE_BIAS - that still exist in the binary snapshot and must be decodable here).
@@ -3889,6 +3895,8 @@ const CONFIG_FIELD_DEFS = [
     { name: "BUZZER_ENABLED", type: "u32", size: 4, align: 4 },
     { name: "GROUND_STATION_MODE", type: "u32", size: 4, align: 4, radioOnly: true },
     { name: "FIRST_STAGE_BURNOUT", type: "u32", size: 4, align: 4 },
+    { name: "ARMED", type: "u32", size: 4, align: 4, radioOnly: true },
+    { name: "GPS_SOURCE", type: "u32", size: 4, align: 4, radioOnly: true },
 ];
 
 // Computes each field's byte offset the same way firmware's Configuration::assignMemory() does
@@ -4128,7 +4136,23 @@ const ALTIMETER_PROFILES = {
         // Also matches an old already-deployed SeriousGooseGroundV1 unit (pre-GROUND_STATION_MODE
         // firmware) - it's the same board family/wire protocol, just running as a ground station,
         // which is now a runtime mode rather than separate firmware (see GROUND_STATION_MODE_c).
-        usbNameMatch: /^seriousgoose/i
+        // Not the Radio Board ground station, which has its own profile below.
+        usbNameMatch: /^seriousgoose(?!groundradioboard)/i
+    },
+    // Ground-station-only board (SAMD51 + SX1262, no sensors or pyros). It relays a flying
+    // SeriousGoose, so while commands are forwarded over radio the config table and Arm/Fire
+    // controls are SeriousGoose's (relayProfile, see Connection.controlProfile()). It has no
+    // released firmware: the Firmware tab only offers a local UF2 for it.
+    RadioBoard: {
+        id: "RadioBoard",
+        displayName: "Radio Board",
+        configs: RADIO_BOARD_CONFIGS,
+        configFields: [],
+        firmwareVariants: [{ value: "V1", label: "Radio Board" }],
+        pyroChannels: [],
+        armable: false,
+        relayProfile: "SeriousGoose",
+        usbNameMatch: /^seriousgoosegroundradioboard/i
     }
 };
 const ALL_BOARD_FAMILIES = ALTIMETER_PROFILES;
@@ -4343,6 +4367,21 @@ class Connection {
         rebuildPyroFireButtons(this);
     }
 
+    // The profile whose configs and Arm/Fire controls apply to the board commands reach: the
+    // relayed flight computer while forwarding over radio (relayProfile), else this board's own.
+    controlProfile() {
+        return this.forwardToRadio && this.profile.relayProfile ? ALTIMETER_PROFILES[this.profile.relayProfile] : this.profile;
+    }
+
+    // Rebuilds the config table and Arm/Fire controls when forwarding changes which board they reach.
+    applyControlProfile() {
+        const configs = this.controlProfile().configs;
+        if (configs === this.configs) return;
+        this.configs = configs;
+        rebuildConfigFields(this);
+        rebuildPyroFireButtons(this);
+    }
+
     // Applies a "LOG_FORMAT\t<definition>" line's definition. A bad definition is reported and
     // dropped, leaving whatever header was already known.
     applyLogFormat(definition) {
@@ -4382,6 +4421,7 @@ class Connection {
         this.setHeader([]);
         this.isGroundStation = false;
         this.forwardToRadio = false;
+        this.applyControlProfile();
         this.adoptStreamBlocked = false;
         this.erasePending = false;
         Telemetry.set('cfg.ARMED', null);
@@ -4397,7 +4437,7 @@ class Connection {
     // Asks an armable board (SeriousGoose) whether it's armed - the "ARMED is set to" reply lands
     // in Telemetry cfg.ARMED, which the Control Panel's arm status shows (renderArmStatus()).
     async requestArmState() {
-        if (!this.profile.armable) return;
+        if (!this.controlProfile().armable) return;
         try { await this.sendCmd("--armed"); } catch (e) { DebugLog.warn('protocol', 'armed request failed: ' + e.message); }
     }
 
@@ -6583,18 +6623,19 @@ function setSerialEnabled(en) {
 function rebuildPyroFireButtons(conn) {
     const container = document.getElementById('pyro-fire-buttons');
     if (!container) return;
-    const armAttrs = conn.profile.armable ? 'class="btn btn-warn ctrl-btn"' : `class="btn btn-warn" title="${conn.profile.displayName} can't be armed or disarmed"`;
-    const armStatus = conn.profile.armable
+    const profile = conn.controlProfile();
+    const armAttrs = profile.armable ? 'class="btn btn-warn ctrl-btn"' : `class="btn btn-warn" title="${profile.displayName} can't be armed or disarmed"`;
+    const armStatus = profile.armable
         ? `<button id="arm-status" class="btn btn-secondary ctrl-btn arm-status" data-cmd="--armed" title="Click to re-check" disabled>Armed: ?</button>`
-        : `<button id="arm-status" class="btn btn-secondary arm-status" disabled>${conn.profile.displayName}: always armed</button>`;
+        : `<button id="arm-status" class="btn btn-secondary arm-status" disabled>${profile.displayName}: ${profile.pyroChannels.length ? 'always armed' : 'no pyros'}</button>`;
     const armRow = armStatus + `<div class="pyro-fire-row">
         <button ${armAttrs} data-cmd="--arm" data-confirm="Arm the board? Its pyros will be able to fire, including deployments in flight." disabled>Arm</button>
         <button ${armAttrs} data-cmd="--disarm" data-confirm="Disarm the board? Its pyros will be locked off (nothing fires, including deployments) until armed again. Flights are still tracked and logged." disabled>Disarm</button>
     </div>`;
     container.innerHTML = armRow + Object.entries(PYRO_FIRE_FLAGS).map(([id, flag]) => {
         const label = id.charAt(0).toUpperCase() + id.slice(1);
-        const applies = conn.profile.pyroChannels.includes(id);
-        const attrs = applies ? 'class="btn btn-warn ctrl-btn"' : `class="btn btn-warn" title="${conn.profile.displayName} has no ${label} channel"`;
+        const applies = profile.pyroChannels.includes(id);
+        const attrs = applies ? 'class="btn btn-warn ctrl-btn"' : `class="btn btn-warn" title="${profile.displayName} has no ${label} channel"`;
         return `<div class="pyro-fire-row">
             <button ${attrs} data-cmd="--fire ${flag}" data-confirm="Fire ${label} pyro?" disabled>Fire ${label}</button>
             <button ${attrs} data-cmd="--fire ${flag} --on" data-confirm="Turn on ${label} and hold it on until the board reboots?" disabled>Turn on ${label}</button>
@@ -6609,7 +6650,7 @@ function rebuildPyroFireButtons(conn) {
 function renderArmStatus(value) {
     const el = document.getElementById('arm-status');
     const conn = ConnectionManager.getActive();
-    if (!el || !conn || !conn.profile.armable) return;
+    if (!el || !conn || !conn.controlProfile().armable) return;
     const known = value === '1' || value === '0';
     el.textContent = known ? (value === '1' ? 'ARMED' : 'DISARMED') : 'Armed: ?';
     el.classList.toggle('arm-armed', value === '1');
@@ -6910,6 +6951,7 @@ const USB_PID_BOARD_MAP = {
     // runtime toggle on SeriousGoose rather than separate firmware. Kept mapped to SeriousGoose so
     // an already-deployed, not-yet-re-flashed ground station still auto-detects correctly.
     0x5004: { familyId: 'SeriousGoose', variant: 'V1' },
+    0x5005: { familyId: 'RadioBoard', variant: 'V1' },
 };
 
 // Exposed separately from fwDetectFamilyFromUsbIds() so 03-connection.js's
@@ -7337,6 +7379,7 @@ radioForwardBtn.onclick = () => {
     const conn = ConnectionManager.getActive();
     conn.forwardToRadio = !conn.forwardToRadio;
     syncRadioForwardButton(conn);
+    conn.applyControlProfile();
     // The armed status shown is for whichever board commands now reach - re-ask that one.
     Telemetry.set('cfg.ARMED', null);
     conn.requestArmState();
